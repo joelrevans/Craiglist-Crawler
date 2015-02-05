@@ -1,0 +1,5 @@
+﻿CREATE TABLE [dbo].[CLCity]
+(
+	[Name] VARCHAR(255) NOT NULL PRIMARY KEY, 
+    [ShortName] VARCHAR(255) NOT NULL
+)

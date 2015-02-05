@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?><Database Name="CraigslistDB" Class="DataAccessDataContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+  <Connection Mode="AppSettings" ConnectionString="Data Source=DEF;Initial Catalog=CraigslistDB;Persist Security Info=True;User ID=sa" SettingsObjectName="CraigslistAutoPoll.Properties.Settings" SettingsPropertyName="CraigslistDBConnectionString" Provider="System.Data.SqlClient" />
+  <Table Name="dbo.CLCity" Member="CLCities">
+    <Type Name="CLCity">
+      <Column Name="Name" Type="System.String" DbType="VarChar(255) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+      <Column Name="ShortName" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+    </Type>
+  </Table>
+  <Table Name="dbo.VehicleModel" Member="VehicleModels">
+    <Type Name="VehicleModel">
+      <Column Name="Name" Type="System.String" DbType="VarChar(255) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+    </Type>
+  </Table>
+  <Table Name="dbo.ListingAttribute" Member="ListingAttributes">
+    <Type Name="ListingAttribute">
+      <Column Name="ListingID" Type="System.Int64" DbType="BigInt NOT NULL" CanBeNull="false" />
+      <Column Name="Name" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="Value" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="Inferred" Type="System.Boolean" DbType="Bit NOT NULL" CanBeNull="false" />
+      <Column Name="AttributeID" Type="System.Int32" DbType="Int NOT NULL IDENTITY" IsPrimaryKey="true" IsDbGenerated="true" CanBeNull="false" />
+      <Association Name="Listing_ListingAttribute" Member="Listing" ThisKey="ListingID" OtherKey="Id" Type="Listing" IsForeignKey="true" />
+    </Type>
+  </Table>
+  <Table Name="dbo.VehicleMake" Member="VehicleMakes">
+    <Type Name="VehicleMake">
+      <Column Name="Name" Type="System.String" DbType="VarChar(255) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+    </Type>
+  </Table>
+  <Table Name="dbo.CLSiteSection" Member="CLSiteSections">
+    <Type Name="CLSiteSection">
+      <Column Name="Name" Type="System.String" DbType="Char(3) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+      <Column Name="Enabled" Type="System.Boolean" DbType="Bit NOT NULL" CanBeNull="false" />
+    </Type>
+  </Table>
+  <Table Name="dbo.CLSubCity" Member="CLSubCities">
+    <Type Name="CLSubCity">
+      <Column Name="ParentCity" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="SubCity" Type="System.String" DbType="Char(3) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+      <Association Name="CLCity_CLSubCity" Member="CLCity" ThisKey="ParentCity" OtherKey="Name" Type="CLCity" IsForeignKey="true" />
+    </Type>
+  </Table>
+  <Table Name="dbo.Listing" Member="Listings">
+    <Type Name="Listing">
+      <Column Name="Id" Type="System.Int64" DbType="BigInt NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+      <Column Name="Body" Type="System.String" DbType="VarChar(MAX) NOT NULL" CanBeNull="false" />
+      <Column Name="Title" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="PostDate" Type="System.DateTime" DbType="DateTime NOT NULL" CanBeNull="false" />
+      <Column Name="SiteSection" Type="System.String" DbType="Char(3) NOT NULL" CanBeNull="false" />
+      <Column Name="Timestamp" Type="System.DateTime" DbType="DateTime NOT NULL" CanBeNull="false" />
+      <Column Name="City" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="SubCity" Type="System.String" DbType="Char(3)" CanBeNull="true" />
+      <Association Name="Listing_ListingAttribute" Member="ListingAttributes" ThisKey="Id" OtherKey="ListingID" Type="ListingAttribute" />
+      <Association Name="CLCity_Listing" Member="CLCity" ThisKey="City" OtherKey="Name" Type="CLCity" IsForeignKey="true" />
+      <Association Name="CLSiteSection_Listing" Member="CLSiteSection" ThisKey="SiteSection" OtherKey="Name" Type="CLSiteSection" IsForeignKey="true" />
+      <Association Name="CLSubCity_Listing" Member="CLSubCity" ThisKey="SubCity" OtherKey="SubCity" Type="CLSubCity" IsForeignKey="true" />
+    </Type>
+  </Table>
+  <Table Name="dbo.Proxy" Member="Proxies">
+    <Type Name="Proxy">
+      <Column Name="IP" Type="System.String" DbType="VarChar(45) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
+      <Column Name="Port" Type="System.Int32" DbType="Int NOT NULL" CanBeNull="false" />
+      <Column Name="Enabled" Type="System.Boolean" DbType="Bit NOT NULL" CanBeNull="false" />
+    </Type>
+  </Table>
+  <Function Name="dbo.GetFeedList" Method="GetFeedList" IsComposable="true">
+    <ElementType Name="GetFeedListResult">
+      <Column Name="City" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="SiteSection" Type="System.String" DbType="Char(3) NOT NULL" CanBeNull="false" />
+      <Column Name="SubCity" Type="System.String" DbType="Char(3)" CanBeNull="true" />
+      <Column Name="Timestamp" Type="System.DateTime" DbType="DateTime NOT NULL" CanBeNull="false" />
+    </ElementType>
+  </Function>
+</Database>

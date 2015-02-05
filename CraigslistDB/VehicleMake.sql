@@ -1,0 +1,4 @@
+﻿CREATE TABLE [dbo].[VehicleMake]
+(
+	[Name] VARCHAR(255) NOT NULL PRIMARY KEY
+)

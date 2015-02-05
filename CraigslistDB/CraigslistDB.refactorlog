@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Operations Version="1.0" xmlns="http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02">
+  <Operation Name="Rename Refactor" Key="f218f706-7343-4be4-8b03-1cbf7af6beb3" ChangeDateTime="12/28/2014 18:21:55">
+    <Property Name="ElementName" Value="[dbo].[VehicleModelYear].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[VehicleModelYear]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="year" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="95d1fab2-3d4d-4a17-b505-fcc9ca243aea" ChangeDateTime="12/31/2014 16:49:30">
+    <Property Name="ElementName" Value="[dbo].[VehicleMake].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[VehicleMake]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="Name" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="5ee8643d-cd6a-4ba4-80fc-2c6e272dccde" ChangeDateTime="12/31/2014 16:50:01">
+    <Property Name="ElementName" Value="[dbo].[VehicleModel].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[VehicleModel]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="Name" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="add17e65-8ff5-4067-a864-7d96371561ee" ChangeDateTime="01/06/2015 04:07:24">
+    <Property Name="ElementName" Value="[dbo].[CLCityList].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[CLCityList]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="Name" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="d4858cbc-512c-4f6b-9bb3-fe3fe08405ef" ChangeDateTime="01/11/2015 18:44:00">
+    <Property Name="ElementName" Value="[dbo].[CLCategory].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[CLCategory]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="Name" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="20b38c69-5886-4c32-8f70-eb7899cc890b" ChangeDateTime="01/11/2015 19:24:28">
+    <Property Name="ElementName" Value="[dbo].[Listing].[CityID]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[Listing]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="City" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="845b7819-52aa-473b-b98d-698ea043174d" ChangeDateTime="01/11/2015 19:25:03">
+    <Property Name="ElementName" Value="[dbo].[FK_Listing_ToTable]" />
+    <Property Name="ElementType" Value="SqlForeignKeyConstraint" />
+    <Property Name="ParentElementName" Value="[dbo].[Listing]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="[FK_Listing_CLCity]" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="31e5440b-2b57-4298-a502-5a748504e509" ChangeDateTime="01/19/2015 15:19:52">
+    <Property Name="ElementName" Value="[dbo].[Proxy].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[Proxy]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="IP" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="7e0593bd-c280-4190-bb8e-3e27b22e69d8" ChangeDateTime="01/25/2015 21:08:14">
+    <Property Name="ElementName" Value="[dbo].[CLSubCity].[Id]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[CLSubCity]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="CLCity" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="387d2fa9-b08f-4414-8992-7e5980bc85fe" ChangeDateTime="01/25/2015 21:09:11">
+    <Property Name="ElementName" Value="[dbo].[CLSubCity].[CLCity]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[CLSubCity]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="ParentCity" />
+  </Operation>
+</Operations>
