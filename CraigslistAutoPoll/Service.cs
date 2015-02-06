@@ -8,11 +8,20 @@ using System.Text;
 using System.Net;
 using HtmlAgilityPack;
 using System.Collections.Specialized;
+using System.IO;
+using System.Data.SqlTypes;
 
 namespace CraigslistAutoPoll
 {
     public partial class Service : ServiceBase
     {
+
+        private struct AsyncRequestStruct
+        {
+            public HttpWebRequest request;
+            public object parameters;
+            public Stopwatch stopwatch;
+        }
 
         public LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>> FeedQueue = new LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>();
         public Queue<Listing> ListingInfoQueue = new Queue<Listing>();
@@ -26,6 +35,12 @@ namespace CraigslistAutoPoll
         DataAccessDataContext dadc = new DataAccessDataContext();
         object key = new object();
 
+#if DEBUG
+        int AllConnectionsCount = 0;
+        TimeSpan AllConnectionsTime = new TimeSpan();
+#endif
+
+        
         public Service()
         {
             InitializeComponent();            
@@ -33,9 +48,16 @@ namespace CraigslistAutoPoll
 
         protected override void OnStart(string[] args)
         {
+            init(); //We put the init into a function so that Tester project may debug the code.
+        }
+
+        protected override void OnStop() {}
+
+        public void init()
+        {
             EventLog.Source = "Craigslist Crawler";
             ServicePointManager.DefaultConnectionLimit = int.MaxValue;
-            ServicePointManager.MaxServicePointIdleTime = Properties.Settings.Default.ConnectionTimeout;
+            ServicePointManager.MaxServicePointIdleTime = 0;// Properties.Settings.Default.ConnectionTimeout;
             ServicePointManager.Expect100Continue = false;
             ServicePointManager.CheckCertificateRevocationList = false;
 
@@ -45,7 +67,7 @@ namespace CraigslistAutoPoll
             {
                 foreach (Proxy prox in dadc.Proxies)
                 {
-                    if(prox.Enabled)
+                    if (prox.Enabled)
                         Proxies.Enqueue(new WebProxy(prox.IP, prox.Port));
                 }
 
@@ -65,8 +87,6 @@ namespace CraigslistAutoPoll
                 EventLog.WriteEntry(ex.Message);
             }
         }
-
-        protected override void OnStop() {}
 
         private void SubmitData()
         {
@@ -110,7 +130,12 @@ namespace CraigslistAutoPoll
                         hwr.Proxy = null;
                         hwr.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
                         hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
-                        hwr.BeginGetResponse(new AsyncCallback(ParseListingBody), ListingBodyQueue.Peek());
+                        AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = ListingBodyQueue.Peek() };
+#if DEBUG
+                        ars.stopwatch = new Stopwatch();
+                        ars.stopwatch.Start();
+#endif
+                        hwr.BeginGetResponse(new AsyncCallback(ParseListingBody), ars);
                 }
                 AvailableConnections--;
                 ListingBodyQueue.Dequeue();
@@ -128,7 +153,7 @@ namespace CraigslistAutoPoll
                     else
                         wc.Proxy = null;
                     wc.DownloadStringCompleted += ParseListingInfo;
-                    wc.DownloadStringAsync(new Uri("http://" + ListingInfoQueue.Peek().CLCity.Name + ".craigslist.org/" + (FeedQueue.First.Value.Item5 == null ? "" : (FeedQueue.First.Value.Item5.SubCity + "/")) + ListingInfoQueue.Peek().CLSiteSection.Name + "/" + ListingInfoQueue.Peek().Id.ToString() + ".html"), ListingInfoQueue.Peek());
+                    wc.DownloadStringAsync(new Uri("http://" + ListingInfoQueue.Peek().CLCity.Name + ".craigslist.org/" + (ListingInfoQueue.Peek().CLSubCity == null ? "" : (ListingInfoQueue.Peek().CLSubCity.SubCity + "/")) + ListingInfoQueue.Peek().CLSiteSection.Name + "/" + ListingInfoQueue.Peek().Id.ToString() + ".html"), ListingInfoQueue.Peek());
                 }
                 AvailableConnections--;
                 ListingInfoQueue.Dequeue();
@@ -140,7 +165,7 @@ namespace CraigslistAutoPoll
                 {
                     try
                     {
-                        var feedlist = dadc.GetFeedList();
+                        var feedlist = dadc.GetFeedList().OrderBy(x=>(x.Timestamp==null?((DateTime)SqlDateTime.MinValue):x.Timestamp));
                         CLSubCity[] subcities = dadc.CLSubCities.ToArray();
                         CLCity[] cities = dadc.CLCities.ToArray();
                         CLSiteSection[] sitesections = dadc.CLSiteSections.ToArray();
@@ -169,8 +194,7 @@ namespace CraigslistAutoPoll
                 }
                 AvailableConnections--;
                 FeedQueue.RemoveFirst();
-            }
-            
+            }       
         }
 
         private void ParseFeed(Object sender, DownloadStringCompletedEventArgs e)
@@ -350,7 +374,7 @@ namespace CraigslistAutoPoll
                     }
                     //If the for loop completes without a return, the next page needs to be looked at
                     if(NoUpdateTimesPosted == false)
-                        FeedQueue.AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 1, feedResource.Item4, feedResource.Item5));
+                        FeedQueue.AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 100, feedResource.Item4, feedResource.Item5));
                 }
                 catch (Exception ex)
                 {
@@ -572,17 +596,18 @@ namespace CraigslistAutoPoll
             {
                 try
                 {
+                    AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
+#if DEBUG
+                    ars.stopwatch.Stop();
+                    AllConnectionsCount++;
+                    AllConnectionsTime += ars.stopwatch.Elapsed;
+#endif
 
-                    ((WebRequest)AsyncResult.AsyncState).EndGetResponse();
-
-                    Listing listingSource = null;//(Listing)UserState;
-
-                    //AsyncResult.AsyncState = HttpStatusCode.
-                    //AsyncResult.
+                    Listing listingSource = (Listing)ars.parameters;
 
                     if (AsyncResult.IsCompleted == false)
                     {
-                        if (ListingFailures.Keys.Contains(e.UserState))
+                        if (ListingFailures.Keys.Contains(listingSource))
                         {
                             ListingFailures[listingSource]++;
                             if (ListingFailures[listingSource] > Properties.Settings.Default.MaxListingRetries)
@@ -599,12 +624,22 @@ namespace CraigslistAutoPoll
                             ListingFailures.Add(listingSource, 1);
                             ListingBodyQueue.Enqueue(listingSource);
                         }
-                        EventLog.WriteEntry("An error has occurred while retreiving the listing body.  Deep inspection: \n\n" + e.Error.Message + "\n\n" + (e.Error.InnerException == null ? "" : e.Error.InnerException.Message)
-                                + "\n\n" + listingSource.CLSiteSection.Name + "\n" + listingSource.CLCity.Name + "\n" + listingSource.Id.ToString(), EventLogEntryType.Warning);
+                        
+                        //EventLog.WriteEntry("An error has occurred while retreiving the listing body.  Deep inspection: \n\n" + e.Error.Message + "\n\n" + (e.Error.InnerException == null ? "" : e.Error.InnerException.Message)
+                        //        + "\n\n" + listingSource.CLSiteSection.Name + "\n" + listingSource.CLCity.Name + "\n" + listingSource.Id.ToString(), EventLogEntryType.Warning);
                         return;
                     }
 
-                    listingSource.Body = e.Result;
+                    using (WebResponse wr = ars.request.EndGetResponse(AsyncResult))
+                    {
+                        using (Stream stream = wr.GetResponseStream())
+                        {
+                            using (StreamReader sr = new StreamReader(stream))
+                            {
+                                listingSource.Body = sr.ReadToEnd();
+                            }
+                        }
+                    }
 
                     if (PostingIds.Contains(listingSource.Id) == false)
                     {
