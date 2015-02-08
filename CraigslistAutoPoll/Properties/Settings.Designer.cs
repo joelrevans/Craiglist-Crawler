@@ -36,7 +36,7 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
         public int MaxConcurrentConnections {
             get {
                 return ((int)(this["MaxConcurrentConnections"]));
@@ -54,19 +54,10 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool DeepBodyInspection {
             get {
                 return ((bool)(this["DeepBodyInspection"]));
-            }
-        }
-        
-        [global::System.Configuration.ApplicationScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("50")]
-        public int MinSubmissionBundleSize {
-            get {
-                return ((int)(this["MinSubmissionBundleSize"]));
             }
         }
         
@@ -90,7 +81,16 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("10000")]
+        [global::System.Configuration.DefaultSettingValueAttribute("500")]
+        public int MinSubmissionBundleSize {
+            get {
+                return ((int)(this["MinSubmissionBundleSize"]));
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("100000")]
         public int ConnectionTimeout {
             get {
                 return ((int)(this["ConnectionTimeout"]));

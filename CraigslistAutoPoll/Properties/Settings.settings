@@ -11,16 +11,13 @@
       <Value Profile="(Default)">Data Source=DEF;Initial Catalog=CraigslistDB;Persist Security Info=True;User ID=sa;Password=gocharlie</Value>
     </Setting>
     <Setting Name="MaxConcurrentConnections" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">2</Value>
+      <Value Profile="(Default)">1</Value>
     </Setting>
     <Setting Name="MaxListingRetries" Type="System.Int32" Scope="Application">
       <Value Profile="(Default)">3</Value>
     </Setting>
     <Setting Name="DeepBodyInspection" Type="System.Boolean" Scope="Application">
-      <Value Profile="(Default)">False</Value>
-    </Setting>
-    <Setting Name="MinSubmissionBundleSize" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">50</Value>
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="MaxConnectionsPerProxy" Type="System.Int32" Scope="Application">
       <Value Profile="(Default)">1</Value>
@@ -28,8 +25,11 @@
     <Setting Name="DisableForbiddenProxies" Type="System.Boolean" Scope="Application">
       <Value Profile="(Default)">True</Value>
     </Setting>
+    <Setting Name="MinSubmissionBundleSize" Type="System.Int32" Scope="Application">
+      <Value Profile="(Default)">500</Value>
+    </Setting>
     <Setting Name="ConnectionTimeout" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">10000</Value>
+      <Value Profile="(Default)">100000</Value>
     </Setting>
   </Settings>
 </SettingsFile>
