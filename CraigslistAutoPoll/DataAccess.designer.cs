@@ -36,9 +36,6 @@ namespace CraigslistAutoPoll
     partial void InsertVehicleModel(VehicleModel instance);
     partial void UpdateVehicleModel(VehicleModel instance);
     partial void DeleteVehicleModel(VehicleModel instance);
-    partial void InsertListingAttribute(ListingAttribute instance);
-    partial void UpdateListingAttribute(ListingAttribute instance);
-    partial void DeleteListingAttribute(ListingAttribute instance);
     partial void InsertVehicleMake(VehicleMake instance);
     partial void UpdateVehicleMake(VehicleMake instance);
     partial void DeleteVehicleMake(VehicleMake instance);
@@ -54,6 +51,9 @@ namespace CraigslistAutoPoll
     partial void InsertProxy(Proxy instance);
     partial void UpdateProxy(Proxy instance);
     partial void DeleteProxy(Proxy instance);
+    partial void InsertListingAttribute(ListingAttribute instance);
+    partial void UpdateListingAttribute(ListingAttribute instance);
+    partial void DeleteListingAttribute(ListingAttribute instance);
     #endregion
 		
 		public DataAccessDataContext() : 
@@ -102,14 +102,6 @@ namespace CraigslistAutoPoll
 			}
 		}
 		
-		public System.Data.Linq.Table<ListingAttribute> ListingAttributes
-		{
-			get
-			{
-				return this.GetTable<ListingAttribute>();
-			}
-		}
-		
 		public System.Data.Linq.Table<VehicleMake> VehicleMakes
 		{
 			get
@@ -147,6 +139,14 @@ namespace CraigslistAutoPoll
 			get
 			{
 				return this.GetTable<Proxy>();
+			}
+		}
+		
+		public System.Data.Linq.Table<ListingAttribute> ListingAttributes
+		{
+			get
+			{
+				return this.GetTable<ListingAttribute>();
 			}
 		}
 		
@@ -280,205 +280,6 @@ namespace CraigslistAutoPoll
 					this._Name = value;
 					this.SendPropertyChanged("Name");
 					this.OnNameChanged();
-				}
-			}
-		}
-		
-		public event PropertyChangingEventHandler PropertyChanging;
-		
-		public event PropertyChangedEventHandler PropertyChanged;
-		
-		protected virtual void SendPropertyChanging()
-		{
-			if ((this.PropertyChanging != null))
-			{
-				this.PropertyChanging(this, emptyChangingEventArgs);
-			}
-		}
-		
-		protected virtual void SendPropertyChanged(String propertyName)
-		{
-			if ((this.PropertyChanged != null))
-			{
-				this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-			}
-		}
-	}
-	
-	[global::System.Data.Linq.Mapping.TableAttribute(Name="dbo.ListingAttribute")]
-	public partial class ListingAttribute : INotifyPropertyChanging, INotifyPropertyChanged
-	{
-		
-		private static PropertyChangingEventArgs emptyChangingEventArgs = new PropertyChangingEventArgs(String.Empty);
-		
-		private long _ListingID;
-		
-		private string _Name;
-		
-		private string _Value;
-		
-		private bool _Inferred;
-		
-		private int _AttributeID;
-		
-		private EntityRef<Listing> _Listing;
-		
-    #region Extensibility Method Definitions
-    partial void OnLoaded();
-    partial void OnValidate(System.Data.Linq.ChangeAction action);
-    partial void OnCreated();
-    partial void OnListingIDChanging(long value);
-    partial void OnListingIDChanged();
-    partial void OnNameChanging(string value);
-    partial void OnNameChanged();
-    partial void OnValueChanging(string value);
-    partial void OnValueChanged();
-    partial void OnInferredChanging(bool value);
-    partial void OnInferredChanged();
-    partial void OnAttributeIDChanging(int value);
-    partial void OnAttributeIDChanged();
-    #endregion
-		
-		public ListingAttribute()
-		{
-			this._Listing = default(EntityRef<Listing>);
-			OnCreated();
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_ListingID", DbType="BigInt NOT NULL")]
-		public long ListingID
-		{
-			get
-			{
-				return this._ListingID;
-			}
-			set
-			{
-				if ((this._ListingID != value))
-				{
-					if (this._Listing.HasLoadedOrAssignedValue)
-					{
-						throw new System.Data.Linq.ForeignKeyReferenceAlreadyHasValueException();
-					}
-					this.OnListingIDChanging(value);
-					this.SendPropertyChanging();
-					this._ListingID = value;
-					this.SendPropertyChanged("ListingID");
-					this.OnListingIDChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Name", DbType="VarChar(255) NOT NULL", CanBeNull=false)]
-		public string Name
-		{
-			get
-			{
-				return this._Name;
-			}
-			set
-			{
-				if ((this._Name != value))
-				{
-					this.OnNameChanging(value);
-					this.SendPropertyChanging();
-					this._Name = value;
-					this.SendPropertyChanged("Name");
-					this.OnNameChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Value", DbType="VarChar(255) NOT NULL", CanBeNull=false)]
-		public string Value
-		{
-			get
-			{
-				return this._Value;
-			}
-			set
-			{
-				if ((this._Value != value))
-				{
-					this.OnValueChanging(value);
-					this.SendPropertyChanging();
-					this._Value = value;
-					this.SendPropertyChanged("Value");
-					this.OnValueChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Inferred", DbType="Bit NOT NULL")]
-		public bool Inferred
-		{
-			get
-			{
-				return this._Inferred;
-			}
-			set
-			{
-				if ((this._Inferred != value))
-				{
-					this.OnInferredChanging(value);
-					this.SendPropertyChanging();
-					this._Inferred = value;
-					this.SendPropertyChanged("Inferred");
-					this.OnInferredChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_AttributeID", AutoSync=AutoSync.OnInsert, DbType="Int NOT NULL IDENTITY", IsPrimaryKey=true, IsDbGenerated=true)]
-		public int AttributeID
-		{
-			get
-			{
-				return this._AttributeID;
-			}
-			set
-			{
-				if ((this._AttributeID != value))
-				{
-					this.OnAttributeIDChanging(value);
-					this.SendPropertyChanging();
-					this._AttributeID = value;
-					this.SendPropertyChanged("AttributeID");
-					this.OnAttributeIDChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.AssociationAttribute(Name="Listing_ListingAttribute", Storage="_Listing", ThisKey="ListingID", OtherKey="Id", IsForeignKey=true)]
-		public Listing Listing
-		{
-			get
-			{
-				return this._Listing.Entity;
-			}
-			set
-			{
-				Listing previousValue = this._Listing.Entity;
-				if (((previousValue != value) 
-							|| (this._Listing.HasLoadedOrAssignedValue == false)))
-				{
-					this.SendPropertyChanging();
-					if ((previousValue != null))
-					{
-						this._Listing.Entity = null;
-						previousValue.ListingAttributes.Remove(this);
-					}
-					this._Listing.Entity = value;
-					if ((value != null))
-					{
-						value.ListingAttributes.Add(this);
-						this._ListingID = value.Id;
-					}
-					else
-					{
-						this._ListingID = default(long);
-					}
-					this.SendPropertyChanged("Listing");
 				}
 			}
 		}
@@ -1205,6 +1006,181 @@ namespace CraigslistAutoPoll
 					this._Cooldown = value;
 					this.SendPropertyChanged("Cooldown");
 					this.OnCooldownChanged();
+				}
+			}
+		}
+		
+		public event PropertyChangingEventHandler PropertyChanging;
+		
+		public event PropertyChangedEventHandler PropertyChanged;
+		
+		protected virtual void SendPropertyChanging()
+		{
+			if ((this.PropertyChanging != null))
+			{
+				this.PropertyChanging(this, emptyChangingEventArgs);
+			}
+		}
+		
+		protected virtual void SendPropertyChanged(String propertyName)
+		{
+			if ((this.PropertyChanged != null))
+			{
+				this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
+			}
+		}
+	}
+	
+	[global::System.Data.Linq.Mapping.TableAttribute(Name="dbo.ListingAttribute")]
+	public partial class ListingAttribute : INotifyPropertyChanging, INotifyPropertyChanged
+	{
+		
+		private static PropertyChangingEventArgs emptyChangingEventArgs = new PropertyChangingEventArgs(String.Empty);
+		
+		private long _ListingID;
+		
+		private string _Name;
+		
+		private string _Value;
+		
+		private int _AttributeID;
+		
+		private EntityRef<Listing> _Listing;
+		
+    #region Extensibility Method Definitions
+    partial void OnLoaded();
+    partial void OnValidate(System.Data.Linq.ChangeAction action);
+    partial void OnCreated();
+    partial void OnListingIDChanging(long value);
+    partial void OnListingIDChanged();
+    partial void OnNameChanging(string value);
+    partial void OnNameChanged();
+    partial void OnValueChanging(string value);
+    partial void OnValueChanged();
+    partial void OnAttributeIDChanging(int value);
+    partial void OnAttributeIDChanged();
+    #endregion
+		
+		public ListingAttribute()
+		{
+			this._Listing = default(EntityRef<Listing>);
+			OnCreated();
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_ListingID", DbType="BigInt NOT NULL")]
+		public long ListingID
+		{
+			get
+			{
+				return this._ListingID;
+			}
+			set
+			{
+				if ((this._ListingID != value))
+				{
+					if (this._Listing.HasLoadedOrAssignedValue)
+					{
+						throw new System.Data.Linq.ForeignKeyReferenceAlreadyHasValueException();
+					}
+					this.OnListingIDChanging(value);
+					this.SendPropertyChanging();
+					this._ListingID = value;
+					this.SendPropertyChanged("ListingID");
+					this.OnListingIDChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Name", DbType="VarChar(255) NOT NULL", CanBeNull=false)]
+		public string Name
+		{
+			get
+			{
+				return this._Name;
+			}
+			set
+			{
+				if ((this._Name != value))
+				{
+					this.OnNameChanging(value);
+					this.SendPropertyChanging();
+					this._Name = value;
+					this.SendPropertyChanged("Name");
+					this.OnNameChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Value", DbType="VarChar(255) NOT NULL", CanBeNull=false)]
+		public string Value
+		{
+			get
+			{
+				return this._Value;
+			}
+			set
+			{
+				if ((this._Value != value))
+				{
+					this.OnValueChanging(value);
+					this.SendPropertyChanging();
+					this._Value = value;
+					this.SendPropertyChanged("Value");
+					this.OnValueChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_AttributeID", AutoSync=AutoSync.OnInsert, DbType="Int NOT NULL IDENTITY", IsPrimaryKey=true, IsDbGenerated=true)]
+		public int AttributeID
+		{
+			get
+			{
+				return this._AttributeID;
+			}
+			set
+			{
+				if ((this._AttributeID != value))
+				{
+					this.OnAttributeIDChanging(value);
+					this.SendPropertyChanging();
+					this._AttributeID = value;
+					this.SendPropertyChanged("AttributeID");
+					this.OnAttributeIDChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.AssociationAttribute(Name="Listing_ListingAttribute", Storage="_Listing", ThisKey="ListingID", OtherKey="Id", IsForeignKey=true)]
+		public Listing Listing
+		{
+			get
+			{
+				return this._Listing.Entity;
+			}
+			set
+			{
+				Listing previousValue = this._Listing.Entity;
+				if (((previousValue != value) 
+							|| (this._Listing.HasLoadedOrAssignedValue == false)))
+				{
+					this.SendPropertyChanging();
+					if ((previousValue != null))
+					{
+						this._Listing.Entity = null;
+						previousValue.ListingAttributes.Remove(this);
+					}
+					this._Listing.Entity = value;
+					if ((value != null))
+					{
+						value.ListingAttributes.Add(this);
+						this._ListingID = value.Id;
+					}
+					else
+					{
+						this._ListingID = default(long);
+					}
+					this.SendPropertyChanged("Listing");
 				}
 			}
 		}
