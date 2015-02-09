@@ -416,8 +416,9 @@ namespace CraigslistAutoPoll
                 parseFeedProcessingTime += sw.Elapsed;
                 parseFeedProcessingCount++;
 #endif
-                
-                Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
+                if ((double)ProxyCooldowns[ars.request.Proxy] > 0)
+                    Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
+
                 try
                 {
                     FetchNextWhatchamacallit();
@@ -615,8 +616,9 @@ namespace CraigslistAutoPoll
                 parseInfoProcessingTime += sw.Elapsed;
                 parseInfoProcessingCount++;
 #endif
+                if((double)ProxyCooldowns[ars.request.Proxy] > 0)
+                    Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
 
-                Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
                 try
                 {
                     FetchNextWhatchamacallit();
