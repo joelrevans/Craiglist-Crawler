@@ -16,9 +16,6 @@
     <Setting Name="MaxListingRetries" Type="System.Int32" Scope="Application">
       <Value Profile="(Default)">3</Value>
     </Setting>
-    <Setting Name="DeepBodyInspection" Type="System.Boolean" Scope="Application">
-      <Value Profile="(Default)">True</Value>
-    </Setting>
     <Setting Name="MaxConnectionsPerProxy" Type="System.Int32" Scope="Application">
       <Value Profile="(Default)">1</Value>
     </Setting>
@@ -26,7 +23,7 @@
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="MinSubmissionBundleSize" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">500</Value>
+      <Value Profile="(Default)">10</Value>
     </Setting>
     <Setting Name="ConnectionTimeout" Type="System.Int32" Scope="Application">
       <Value Profile="(Default)">100000</Value>

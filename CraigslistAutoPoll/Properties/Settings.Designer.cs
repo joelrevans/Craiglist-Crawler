@@ -54,15 +54,6 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool DeepBodyInspection {
-            get {
-                return ((bool)(this["DeepBodyInspection"]));
-            }
-        }
-        
-        [global::System.Configuration.ApplicationScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("1")]
         public int MaxConnectionsPerProxy {
             get {
@@ -81,7 +72,7 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("500")]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
         public int MinSubmissionBundleSize {
             get {
                 return ((int)(this["MinSubmissionBundleSize"]));

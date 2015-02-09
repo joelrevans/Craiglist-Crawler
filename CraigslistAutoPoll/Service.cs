@@ -121,29 +121,6 @@ namespace CraigslistAutoPoll
 
         public void FetchNextWhatchamacallit()
         {
-            while (ListingBodyQueue.Count > 0 && AvailableConnections > 0)
-            {
-                HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + ListingBodyQueue.Peek().CLCity.Name + ".craigslist.org/fb/" + ListingBodyQueue.Peek().CLCity.ShortName + "/" + ListingBodyQueue.Peek().CLSiteSection.Name + "/" + ListingBodyQueue.Peek().Id);
-
-                    if (Proxies.Count > 0)
-                    {
-                        hwr.Proxy = Proxies.Peek();
-                        Proxies.Enqueue(Proxies.Dequeue());
-                    }
-                    else
-                        hwr.Proxy = null;
-                    hwr.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                    hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
-                    AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = ListingBodyQueue.Peek() };
-#if DEBUG
-                    ars.stopwatch = new Stopwatch();
-                    ars.stopwatch.Start();
-#endif
-                    hwr.BeginGetResponse(new AsyncCallback(ParseListingBody), ars);
-                
-                AvailableConnections--;
-                ListingBodyQueue.Dequeue();
-            }
 
             while (ListingInfoQueue.Count > 0 && AvailableConnections > 0)
             {
@@ -189,11 +166,6 @@ namespace CraigslistAutoPoll
                         return;
                     }
                 }
-
-
-
-
-
 
                 HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + FeedQueue.First.Value.Item2.Name + ".craigslist.org/search/" + (FeedQueue.First.Value.Item5 == null ? "" : (FeedQueue.First.Value.Item5.SubCity + "/")) + FeedQueue.First.Value.Item1.Name + "?s=" + FeedQueue.First.Value.Item3.ToString());
                 {
@@ -302,6 +274,8 @@ namespace CraigslistAutoPoll
                             return;
                         }
 
+                        Listing listingSource = new Listing() { CLSiteSection = SiteSection, CLCity = City, CLSubCity = subCity, Timestamp = DateTime.Now };
+
                         //LASTUPDATED
                         try
                         {
@@ -313,24 +287,22 @@ namespace CraigslistAutoPoll
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Failure to parse listing update time.\n" + SiteSection.Name + "\n" + City.Name + (subCity==null?"":("\n"+subCity.SubCity)) + "\n" + depth.ToString() + "\n\n" + ex.Message, EventLogEntryType.Error);
+                            EventLog.WriteEntry("Failure to parse listing update time.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Error);
                             return;
                         }
-
-                        Listing current = new Listing() { CLSiteSection = SiteSection, CLCity = City, CLSubCity = subCity, Timestamp = DateTime.Now };
 
                         //ID
                         try
                         {
-                            current.Id = long.Parse(row.Attributes["data-pid"].Value);
+                            listingSource.Id = long.Parse(row.Attributes["data-pid"].Value);
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Listing has an invalid ID:  " + SiteSection.Name + "\n" + City.Name + (subCity==null?"":("\n"+subCity.SubCity)) + "\n" + depth.ToString() + "\n\n" + ex.Message, EventLogEntryType.Warning);
+                            EventLog.WriteEntry("Listing has an invalid ID:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                             continue;
                         }
 
-                        if (PostingIds.Contains(current.Id))
+                        if (PostingIds.Contains(listingSource.Id))
                         {
                             continue;
                         }
@@ -343,7 +315,7 @@ namespace CraigslistAutoPoll
                                 try
                                 {
                                     string value = long.Parse(hn.InnerText.Replace("$", "").Replace(@"&#x0024;", "")).ToString();
-                                    current.ListingAttributes.Add(
+                                    listingSource.ListingAttributes.Add(
                                         new ListingAttribute()
                                         {
                                             Name = "price",
@@ -353,7 +325,7 @@ namespace CraigslistAutoPoll
                                 }
                                 catch (Exception ex)
                                 {
-                                    EventLog.WriteEntry("Error parsing price listing data:  " + hn.InnerText.Replace("$", "").Replace(@"&#x0024;", "") + "\n\n" + SiteSection.Name + "\n" + City.Name + (subCity == null ? "" : ("\n" + subCity.SubCity)) + "\n" + depth.ToString() + "\n\n" + ex.Message, EventLogEntryType.Warning);
+                                    EventLog.WriteEntry("Error parsing price listing data:  " + hn.InnerText.Replace("$", "").Replace(@"&#x0024;", "") + "\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                                 }
                             }
                         }
@@ -365,11 +337,11 @@ namespace CraigslistAutoPoll
                             {
                                 try
                                 {
-                                    current.ListingAttributes.Add(new ListingAttribute() { Name = "Locale", Value = hn.InnerText.Replace("(", "").Replace(")", "").Trim() });
+                                    listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Locale", Value = hn.InnerText.Replace("(", "").Replace(")", "").Trim() });
                                 }
                                 catch (Exception ex)
                                 {
-                                    EventLog.WriteEntry("Error parsing listing locale data:  " + hn.InnerText.Replace("(", "").Replace(")", "").Trim() + "\n" + SiteSection.Name + "\n" + City.Name + (subCity == null ? "" : ("\n" + subCity.SubCity)) + "\n" + depth.ToString() + "\n\n" + ex.Message, EventLogEntryType.Warning);
+                                    EventLog.WriteEntry("Error parsing listing locale data:  " + hn.InnerText.Replace("(", "").Replace(")", "").Trim() + "\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                                 }
                             }
                         }
@@ -381,31 +353,31 @@ namespace CraigslistAutoPoll
                             {
                                 if (hn.InnerText.Contains("pic"))
                                 {
-                                    current.ListingAttributes.Add(new ListingAttribute() { Name = "Has Picture", Value = "True" });
+                                    listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Has Picture", Value = "True" });
                                 }
                                 if (hn.InnerText.Contains("map"))
                                 {
-                                    current.ListingAttributes.Add(new ListingAttribute() { Name = "Has Map", Value = "True" });
+                                    listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Has Map", Value = "True" });
                                 }
                             }
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Error while parsing pic and map presence:\n" + SiteSection.Name + "\n" + City.Name + (subCity == null ? "" : ("\n" + subCity.SubCity)) + "\n" + depth.ToString() + "\n\n" + ex.Message, EventLogEntryType.Warning);
+                            EventLog.WriteEntry("Error while parsing pic and map presence:\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                         }
 
                         //TITLE
                         try
                         {
-                            current.Title = row.SelectSingleNode("span[@class='txt']/span[@class='pl']/a[@class='hdrlnk']").InnerText;
+                            listingSource.Title = row.SelectSingleNode("span[@class='txt']/span[@class='pl']/a[@class='hdrlnk']").InnerText;
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Listing skipped.  Error parsing title from listing.  ListingID:  " + current.Id.ToString() + "\n" + SiteSection.Name + "\n" + City.Name + (subCity == null ? "" : ("\n" + subCity.SubCity)) + "\n" + depth.ToString() + "\n\n" + ex.Message, EventLogEntryType.Warning);
+                            EventLog.WriteEntry("Listing skipped.  Error parsing title from listing.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                             continue;
                         }
 
-                        ListingInfoQueue.Enqueue(current);
+                        ListingInfoQueue.Enqueue(listingSource);
                     }
                     //If the for loop completes without a return, the next page needs to be looked at
                     if(NoUpdateTimesPosted == false)
@@ -413,7 +385,7 @@ namespace CraigslistAutoPoll
                 }
                 catch (Exception ex)
                 {
-                    EventLog.WriteEntry("An error has occurred while parsing the feed:\n\n" + ex.Message, EventLogEntryType.Error);
+                    EventLog.WriteEntry("An error has occurred while parsing the feed:\n\n" + PrintException(ex), EventLogEntryType.Error);
                 }
                 finally
                 {
@@ -423,7 +395,7 @@ namespace CraigslistAutoPoll
                     }
                     catch (Exception ex)
                     {
-                        EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + ex.Message);
+                        EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + PrintException(ex));
                     }
                 }
             }
@@ -454,7 +426,6 @@ namespace CraigslistAutoPoll
                             {
                                 using (StreamReader sr = new StreamReader(stream))
                                 {
-                                    
                                     response.LoadHtml(sr.ReadToEnd());                                    
                                 }
                             }
@@ -501,8 +472,7 @@ namespace CraigslistAutoPoll
                             ListingInfoQueue.Enqueue(listingSource);
                         }
 
-                        EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + ex.Message + "\n\n" + (ex.InnerException == null ? "" : ex.InnerException.Message)
-                            + "\n\n" + listingSource.CLSiteSection.Name + (listingSource.CLSubCity==null?"":("\n"+listingSource.CLSubCity.SubCity)) + "\n" + listingSource.CLCity.Name + "\n" + listingSource.Id.ToString(), EventLogEntryType.Warning);
+                        EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                         return;
                     }
 
@@ -525,7 +495,7 @@ namespace CraigslistAutoPoll
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Error parsing GPS coordinates:\n" + listingSource.CLSiteSection.Name + "\n" + listingSource.CLCity.Name + (listingSource.CLSubCity==null?"":("\n"+listingSource.CLSubCity.SubCity)) + "\n" + listingSource.Id + "\n\n" + ex.Message);
+                            EventLog.WriteEntry("Error parsing GPS coordinates:\n\n" + PrintException(ex) + PrintListing(listingSource));
                         }
                     }
 
@@ -552,7 +522,7 @@ namespace CraigslistAutoPoll
                     }
                     catch (Exception ex)
                     {
-                        EventLog.WriteEntry("Listing skipped.  Post date could not be identified or parsed.  \n\nListingID:  " + listingSource.Id + "\n\nCity:  " + listingSource.CLCity.Name + "\n\nSite Section:  " + listingSource.CLSiteSection.Name + (listingSource.CLSubCity==null?"":("\n"+listingSource.CLSubCity.SubCity)) + "\n\n" + ex.Message, EventLogEntryType.Warning);
+                        EventLog.WriteEntry("Listing skipped.  Post date could not be identified or parsed.\n\n" + PrintException(ex) + PrintListing(listingSource) + ex.Message, EventLogEntryType.Warning);
                         return;
                     }
 
@@ -585,30 +555,24 @@ namespace CraigslistAutoPoll
                         }
                     }
 
-                    if (Properties.Settings.Default.DeepBodyInspection)
+                    //BODY
+                    try
                     {
-                        ListingBodyQueue.Enqueue(listingSource);
+                        HtmlNode hn = response.DocumentNode.SelectSingleNode("//section[@id='postingbody']");
+                        listingSource.Body = hn.InnerText;
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        try
-                        {
-                            HtmlNode hn = response.DocumentNode.SelectSingleNode("//section[@id='postingbody']");
-                            listingSource.Body = hn.InnerText;
-                        }
-                        catch (Exception ex)
-                        {
-                            EventLog.WriteEntry("An error has occurred while parsing the listing body: \n\n" + ex.Message + "\n\n" + (ex.InnerException == null ? "" : ex.InnerException.Message)
-                                + "\n\n" + listingSource.CLSiteSection.Name + "\n" + listingSource.CLCity.Name + "\n" + listingSource.Id.ToString(), EventLogEntryType.Warning);
-                        }
+                        EventLog.WriteEntry("An error has occurred while parsing the listing body: \n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                    }
 
-                        if (PostingIds.Contains(listingSource.Id) == false)
-                        {
-                            dadc.Listings.InsertOnSubmit(listingSource);
-                            PostingIds.Add(listingSource.Id);
-                            SubmitData();
-                        }
+                    if (PostingIds.Contains(listingSource.Id) == false)
+                    {
+                        dadc.Listings.InsertOnSubmit(listingSource);
+                        PostingIds.Add(listingSource.Id);
+                        SubmitData();
                     }
+                    
                 }
                 finally
                 {
@@ -624,73 +588,21 @@ namespace CraigslistAutoPoll
             }
         }
 
-        public void ParseListingBody(IAsyncResult AsyncResult)
+        public string PrintListing(Listing listingSource)
         {
-            
-            AvailableConnections++;
-            lock (key)
+            return listingSource.CLSiteSection.Name + (listingSource.CLSubCity == null ? "" : ("\n" + listingSource.CLSubCity.SubCity)) + "\n" + listingSource.CLCity.Name + "\n" + listingSource.Id.ToString();
+        }
+
+        public string PrintException(Exception ex)
+        {
+            StringBuilder sb = new StringBuilder();
+            do
             {
-                try
-                {
-                    AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
-#if DEBUG
-                    ars.stopwatch.Stop();
-                    AllConnectionsCount++;
-                    AllConnectionsTime += ars.stopwatch.Elapsed;
-#endif
-
-                    Listing listingSource = (Listing)ars.parameters;
-
-                    try
-                    {
-                        using (WebResponse wr = ars.request.EndGetResponse(AsyncResult))
-                        {
-                            using (Stream stream = wr.GetResponseStream())
-                            {
-                                using (StreamReader sr = new StreamReader(stream))
-                                {
-                                    listingSource.Body = sr.ReadToEnd();
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        if (ListingFailures.Keys.Contains(listingSource))
-                        {
-                            ListingFailures[listingSource]++;
-                            if (ListingFailures[listingSource] > Properties.Settings.Default.MaxListingRetries)
-                            {
-                                ListingFailures.Remove(listingSource);
-                            }
-                            else
-                            {
-                                ListingBodyQueue.Enqueue(listingSource);
-                            }
-                        }
-                        else
-                        {
-                            ListingFailures.Add(listingSource, 1);
-                            ListingBodyQueue.Enqueue(listingSource);
-                        }
-
-                        EventLog.WriteEntry("An error has occurred while retreiving the listing body.  Deep inspection: \n\n" + ex.Message + "\n\n " + (ex.InnerException == null ? "" : ex.InnerException.Message)
-                                + "\n\n" + listingSource.CLSiteSection.Name + "\n" + listingSource.CLCity.Name + "\n" + listingSource.Id.ToString(), EventLogEntryType.Warning);
-                        return;
-                    }
-
-                    if (PostingIds.Contains(listingSource.Id) == false)
-                    {
-                        dadc.Listings.InsertOnSubmit(listingSource);
-                        PostingIds.Add(listingSource.Id);
-                        SubmitData();
-                    }
-                }
-                finally
-                {
-                    FetchNextWhatchamacallit();
-                }
-            }
+                sb.Append(ex.Message);
+                sb.Append("\n\n");
+                ex = ex.InnerException;
+            } while (ex != null);
+            return sb.ToString();
         }
     }
 }
