@@ -36,8 +36,17 @@ namespace CraigslistAutoPoll
         object key = new object();
 
 #if DEBUG
-        int AllConnectionsCount = 0;
-        TimeSpan AllConnectionsTime = new TimeSpan();
+        int parseFeedProcessingCount = 0;
+        TimeSpan parseFeedProcessingTime = new TimeSpan();
+
+        int parseFeedConnectionCount = 0;
+        TimeSpan parseFeedConnectionTime = new TimeSpan();
+
+        int parseInfoProcessingCount = 0;
+        TimeSpan parseInfoProcessingTime = new TimeSpan();
+
+        int parseInfoConnectionCount = 0;
+        TimeSpan parseInfoConnectionTime = new TimeSpan();
 #endif
 
         
@@ -192,17 +201,20 @@ namespace CraigslistAutoPoll
 
         private void ParseFeed(IAsyncResult AsyncResult)
         {
-            AvailableConnections++;
-            lock (key)
+#if DEBUG
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+#endif
+            try
             {
-                try
+                AvailableConnections++;
+                lock (key)
                 {
-
                     AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
 #if DEBUG
                     ars.stopwatch.Stop();
-                    AllConnectionsCount++;
-                    AllConnectionsTime += ars.stopwatch.Elapsed;
+                    parseFeedConnectionCount++;
+                    parseFeedConnectionTime += ars.stopwatch.Elapsed;
 #endif
 
                     Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity> feedResource = (Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>)ars.parameters;
@@ -383,36 +395,47 @@ namespace CraigslistAutoPoll
                     if(NoUpdateTimesPosted == false)
                         FeedQueue.AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 100, feedResource.Item4, feedResource.Item5));
                 }
+                
+            }
+            catch (Exception ex)
+            {
+                EventLog.WriteEntry("An error has occurred while parsing the feed:\n\n" + PrintException(ex), EventLogEntryType.Error);
+            }
+            finally
+            {
+#if DEBUG
+                sw.Stop();
+                parseFeedProcessingTime += sw.Elapsed;
+                parseFeedProcessingCount++;
+#endif
+                try
+                {
+                    FetchNextWhatchamacallit();
+                }
                 catch (Exception ex)
                 {
-                    EventLog.WriteEntry("An error has occurred while parsing the feed:\n\n" + PrintException(ex), EventLogEntryType.Error);
-                }
-                finally
-                {
-                    try
-                    {
-                        FetchNextWhatchamacallit();
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + PrintException(ex));
-                    }
+                    EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + PrintException(ex));
                 }
             }
         }
 
         public void ParseListingInfo(IAsyncResult AsyncResult)
         {
-            AvailableConnections++;
-            lock (key)
+#if DEBUG
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+#endif 
+            try
             {
-                try
+                AvailableConnections++;
+                lock (key)
                 {
+
                     AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
 #if DEBUG
                     ars.stopwatch.Stop();
-                    AllConnectionsCount++;
-                    AllConnectionsTime += ars.stopwatch.Elapsed;
+                    parseInfoConnectionCount++;
+                    parseInfoConnectionTime += ars.stopwatch.Elapsed;
 #endif
 
                     Listing listingSource = (Listing)ars.parameters;
@@ -426,7 +449,7 @@ namespace CraigslistAutoPoll
                             {
                                 using (StreamReader sr = new StreamReader(stream))
                                 {
-                                    response.LoadHtml(sr.ReadToEnd());                                    
+                                    response.LoadHtml(sr.ReadToEnd());
                                 }
                             }
                         }
@@ -572,18 +595,23 @@ namespace CraigslistAutoPoll
                         PostingIds.Add(listingSource.Id);
                         SubmitData();
                     }
-                    
                 }
-                finally
+            }
+            finally
+            {
+#if DEBUG
+                sw.Stop();
+                parseInfoProcessingTime += sw.Elapsed;
+                parseInfoProcessingCount++;
+#endif
+
+                try
                 {
-                    try
-                    {
-                        FetchNextWhatchamacallit();
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + ex.Message);
-                    }
+                    FetchNextWhatchamacallit();
+                }
+                catch (Exception ex)
+                {
+                    EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + ex.Message);
                 }
             }
         }

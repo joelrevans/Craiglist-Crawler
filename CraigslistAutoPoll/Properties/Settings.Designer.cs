@@ -87,5 +87,14 @@ namespace CraigslistAutoPoll.Properties {
                 return ((int)(this["ConnectionTimeout"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.5")]
+        public float MinConnectionTime {
+            get {
+                return ((float)(this["MinConnectionTime"]));
+            }
+        }
     }
 }
