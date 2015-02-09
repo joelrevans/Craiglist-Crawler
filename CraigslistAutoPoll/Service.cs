@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data.Linq;
 using System.Diagnostics;
@@ -10,6 +11,7 @@ using HtmlAgilityPack;
 using System.Collections.Specialized;
 using System.IO;
 using System.Data.SqlTypes;
+using System.Threading;
 
 namespace CraigslistAutoPoll
 {
@@ -29,6 +31,8 @@ namespace CraigslistAutoPoll
         public Dictionary<Listing, int> ListingFailures = new Dictionary<Listing, int>();
 
         public Queue<WebProxy> Proxies = new Queue<WebProxy>();
+        public Hashtable ProxyCooldowns = new Hashtable();
+
         public int AvailableConnections = 0;
 
         public List<long> PostingIds = null;
@@ -55,6 +59,7 @@ namespace CraigslistAutoPoll
             InitializeComponent();            
         }
 
+
         protected override void OnStart(string[] args)
         {
             init(); //We put the init into a function so that Tester project may debug the code.
@@ -77,7 +82,11 @@ namespace CraigslistAutoPoll
                 foreach (Proxy prox in dadc.Proxies)
                 {
                     if (prox.Enabled)
-                        Proxies.Enqueue(new WebProxy(prox.IP, prox.Port));
+                    {
+                        WebProxy wp = new WebProxy(prox.IP, prox.Port);
+                        Proxies.Enqueue(wp);
+                        ProxyCooldowns.Add(wp, prox.Cooldown);
+                    }
                 }
 
                 PostingIds = dadc.Listings.Select(x => x.Id).ToList();
@@ -130,7 +139,6 @@ namespace CraigslistAutoPoll
 
         public void FetchNextWhatchamacallit()
         {
-
             while (ListingInfoQueue.Count > 0 && AvailableConnections > 0)
             {
                 HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + ListingInfoQueue.Peek().CLCity.Name + ".craigslist.org/" + (ListingInfoQueue.Peek().CLSubCity == null ? "" : (ListingInfoQueue.Peek().CLSubCity.SubCity + "/")) + ListingInfoQueue.Peek().CLSiteSection.Name + "/" + ListingInfoQueue.Peek().Id.ToString() + ".html");
@@ -196,21 +204,20 @@ namespace CraigslistAutoPoll
                 }
                 AvailableConnections--;
                 FeedQueue.RemoveFirst();
-            }       
+            }
         }
 
         private void ParseFeed(IAsyncResult AsyncResult)
         {
-#if DEBUG
             Stopwatch sw = new Stopwatch();
             sw.Start();
-#endif
+
+            AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
             try
             {
                 AvailableConnections++;
                 lock (key)
                 {
-                    AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
 #if DEBUG
                     ars.stopwatch.Stop();
                     parseFeedConnectionCount++;
@@ -403,11 +410,14 @@ namespace CraigslistAutoPoll
             }
             finally
             {
+                
 #if DEBUG
                 sw.Stop();
                 parseFeedProcessingTime += sw.Elapsed;
                 parseFeedProcessingCount++;
 #endif
+                
+                Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
                 try
                 {
                     FetchNextWhatchamacallit();
@@ -425,13 +435,14 @@ namespace CraigslistAutoPoll
             Stopwatch sw = new Stopwatch();
             sw.Start();
 #endif 
+            AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
             try
             {
                 AvailableConnections++;
                 lock (key)
                 {
 
-                    AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
+                    
 #if DEBUG
                     ars.stopwatch.Stop();
                     parseInfoConnectionCount++;
@@ -605,6 +616,7 @@ namespace CraigslistAutoPoll
                 parseInfoProcessingCount++;
 #endif
 
+                Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
                 try
                 {
                     FetchNextWhatchamacallit();

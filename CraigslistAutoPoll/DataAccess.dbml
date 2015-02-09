@@ -60,6 +60,7 @@
       <Column Name="IP" Type="System.String" DbType="VarChar(45) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
       <Column Name="Port" Type="System.Int32" DbType="Int NOT NULL" CanBeNull="false" />
       <Column Name="Enabled" Type="System.Boolean" DbType="Bit NOT NULL" CanBeNull="false" />
+      <Column Name="Cooldown" Type="System.Double" DbType="Float NOT NULL" CanBeNull="false" />
     </Type>
   </Table>
   <Function Name="dbo.GetFeedList" Method="GetFeedList" IsComposable="true">

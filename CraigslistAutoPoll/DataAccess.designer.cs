@@ -1108,6 +1108,8 @@ namespace CraigslistAutoPoll
 		
 		private bool _Enabled;
 		
+		private double _Cooldown;
+		
     #region Extensibility Method Definitions
     partial void OnLoaded();
     partial void OnValidate(System.Data.Linq.ChangeAction action);
@@ -1118,6 +1120,8 @@ namespace CraigslistAutoPoll
     partial void OnPortChanged();
     partial void OnEnabledChanging(bool value);
     partial void OnEnabledChanged();
+    partial void OnCooldownChanging(double value);
+    partial void OnCooldownChanged();
     #endregion
 		
 		public Proxy()
@@ -1181,6 +1185,26 @@ namespace CraigslistAutoPoll
 					this._Enabled = value;
 					this.SendPropertyChanged("Enabled");
 					this.OnEnabledChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Cooldown", DbType="Float NOT NULL")]
+		public double Cooldown
+		{
+			get
+			{
+				return this._Cooldown;
+			}
+			set
+			{
+				if ((this._Cooldown != value))
+				{
+					this.OnCooldownChanging(value);
+					this.SendPropertyChanging();
+					this._Cooldown = value;
+					this.SendPropertyChanged("Cooldown");
+					this.OnCooldownChanged();
 				}
 			}
 		}

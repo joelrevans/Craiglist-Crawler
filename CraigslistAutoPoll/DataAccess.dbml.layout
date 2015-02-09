@@ -79,10 +79,10 @@
         <classShapeMoniker Id="35cd2086-f561-4d8e-8235-a6b8d08cbb66" />
       </nodes>
     </associationConnector>
-    <classShape Id="51740a87-564b-4482-85a8-1caa519b68c2" absoluteBounds="3.875, 6.125, 2, 1.3862939453125">
+    <classShape Id="8f4f4454-18e8-4d88-b9d8-58380c42e255" absoluteBounds="5.125, 6.375, 2, 1.5785953776041666">
       <DataClassMoniker Name="/DataAccessDataContext/Proxy" />
       <nestedChildShapes>
-        <elementListCompartment Id="85e4d93e-42eb-4308-af47-38a326728f7d" absoluteBounds="3.8899999999999997, 6.585, 1.9700000000000002, 0.8262939453125" name="DataPropertiesCompartment" titleTextColor="Black" itemTextColor="Black" />
+        <elementListCompartment Id="3a9b1b36-f269-47e9-9422-a43b5e1e9662" absoluteBounds="5.14, 6.835, 1.9700000000000002, 1.0185953776041665" name="DataPropertiesCompartment" titleTextColor="Black" itemTextColor="Black" />
       </nestedChildShapes>
     </classShape>
   </nestedChildShapes>
