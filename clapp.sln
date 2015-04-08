@@ -7,7 +7,7 @@ Project("{00D1A9C2-B5F0-4AF3-8072-F6C62B433612}") = "CraigslistDB", "CraigslistD
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CraigslistAutoPoll", "CraigslistAutoPoll\CraigslistAutoPoll.csproj", "{D06104EF-B428-43ED-AF03-4CAEA514E106}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubCityGenerator", "SubCityGenerator\SubCityGenerator.csproj", "{6372533C-A526-46C4-9504-F46C621B7DCA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InfoGenerator", "SubCityGenerator\InfoGenerator.csproj", "{6372533C-A526-46C4-9504-F46C621B7DCA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tester", "Tester\Tester.csproj", "{82D39D68-8544-4C5A-9B5E-A5071D65FD68}"
 EndProject

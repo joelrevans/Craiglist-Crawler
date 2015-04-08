@@ -1,4 +1,7 @@
-﻿CREATE FUNCTION [dbo].[GetFeedList]()
+﻿CREATE FUNCTION [dbo].[GetFeedList]
+(
+	@IPFilter varchar(15)
+)
 RETURNS @Result TABLE
 (
 	City varchar(255) NOT NULL,
@@ -22,7 +25,14 @@ BEGIN
 		on Listing.City = CLCity.Name
 		and (Listing.SubCity = CLSubCity.SubCity or Listing.SubCity is null and CLSubCity.SubCity is null)
 		and listing.SiteSection = CLSiteSection.Name
-	where CLSiteSection.Enabled = 1
-	group by CLCity.Name, CLSiteSection.Name, CLSubCity.SubCity
+	where
+		CLSiteSection.Enabled = 1
+		and CLCity.Enabled = 1
+		AND 
+		(
+			CLCity.IP = @IPFilter
+			or @IPFilter is null
+		)
+	group by CLCity.Name, CLSiteSection.Name, CLSubCity.SubCity, CLCity.IP
 	RETURN 
 END

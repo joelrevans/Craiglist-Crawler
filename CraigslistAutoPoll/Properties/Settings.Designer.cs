@@ -37,36 +37,9 @@ namespace CraigslistAutoPoll.Properties {
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("1")]
-        public int MaxConcurrentConnections {
+        public int MaxConnectionRetries {
             get {
-                return ((int)(this["MaxConcurrentConnections"]));
-            }
-        }
-        
-        [global::System.Configuration.ApplicationScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("3")]
-        public int MaxListingRetries {
-            get {
-                return ((int)(this["MaxListingRetries"]));
-            }
-        }
-        
-        [global::System.Configuration.ApplicationScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("1")]
-        public int MaxConnectionsPerProxy {
-            get {
-                return ((int)(this["MaxConnectionsPerProxy"]));
-            }
-        }
-        
-        [global::System.Configuration.ApplicationScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool DisableForbiddenProxies {
-            get {
-                return ((bool)(this["DisableForbiddenProxies"]));
+                return ((int)(this["MaxConnectionRetries"]));
             }
         }
         
@@ -81,19 +54,28 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("100000")]
-        public int ConnectionTimeout {
+        [global::System.Configuration.DefaultSettingValueAttribute("Product Identifier")]
+        public string UserAgent {
             get {
-                return ((int)(this["ConnectionTimeout"]));
+                return ((string)(this["UserAgent"]));
             }
         }
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0.5")]
-        public float MinConnectionTime {
+        [global::System.Configuration.DefaultSettingValueAttribute("1000")]
+        public int ConnectionCooldown {
             get {
-                return ((float)(this["MinConnectionTime"]));
+                return ((int)(this["ConnectionCooldown"]));
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool DisabledBannedProxies {
+            get {
+                return ((bool)(this["DisabledBannedProxies"]));
             }
         }
     }

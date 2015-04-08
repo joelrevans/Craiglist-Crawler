@@ -30,9 +30,6 @@ namespace CraigslistAutoPoll
 		
     #region Extensibility Method Definitions
     partial void OnCreated();
-    partial void InsertCLCity(CLCity instance);
-    partial void UpdateCLCity(CLCity instance);
-    partial void DeleteCLCity(CLCity instance);
     partial void InsertVehicleModel(VehicleModel instance);
     partial void UpdateVehicleModel(VehicleModel instance);
     partial void DeleteVehicleModel(VehicleModel instance);
@@ -48,12 +45,15 @@ namespace CraigslistAutoPoll
     partial void InsertListing(Listing instance);
     partial void UpdateListing(Listing instance);
     partial void DeleteListing(Listing instance);
-    partial void InsertProxy(Proxy instance);
-    partial void UpdateProxy(Proxy instance);
-    partial void DeleteProxy(Proxy instance);
     partial void InsertListingAttribute(ListingAttribute instance);
     partial void UpdateListingAttribute(ListingAttribute instance);
     partial void DeleteListingAttribute(ListingAttribute instance);
+    partial void InsertProxy(Proxy instance);
+    partial void UpdateProxy(Proxy instance);
+    partial void DeleteProxy(Proxy instance);
+    partial void InsertCLCity(CLCity instance);
+    partial void UpdateCLCity(CLCity instance);
+    partial void DeleteCLCity(CLCity instance);
     #endregion
 		
 		public DataAccessDataContext() : 
@@ -84,14 +84,6 @@ namespace CraigslistAutoPoll
 				base(connection, mappingSource)
 		{
 			OnCreated();
-		}
-		
-		public System.Data.Linq.Table<CLCity> CLCities
-		{
-			get
-			{
-				return this.GetTable<CLCity>();
-			}
 		}
 		
 		public System.Data.Linq.Table<VehicleModel> VehicleModels
@@ -134,14 +126,6 @@ namespace CraigslistAutoPoll
 			}
 		}
 		
-		public System.Data.Linq.Table<Proxy> Proxies
-		{
-			get
-			{
-				return this.GetTable<Proxy>();
-			}
-		}
-		
 		public System.Data.Linq.Table<ListingAttribute> ListingAttributes
 		{
 			get
@@ -150,96 +134,26 @@ namespace CraigslistAutoPoll
 			}
 		}
 		
+		public System.Data.Linq.Table<Proxy> Proxies
+		{
+			get
+			{
+				return this.GetTable<Proxy>();
+			}
+		}
+		
+		public System.Data.Linq.Table<CLCity> CLCities
+		{
+			get
+			{
+				return this.GetTable<CLCity>();
+			}
+		}
+		
 		[global::System.Data.Linq.Mapping.FunctionAttribute(Name="dbo.GetFeedList", IsComposable=true)]
-		public IQueryable<GetFeedListResult> GetFeedList()
+		public IQueryable<GetFeedListResult> GetFeedList([global::System.Data.Linq.Mapping.ParameterAttribute(Name="IPFilter", DbType="VarChar(15)")] string iPFilter)
 		{
-			return this.CreateMethodCallQuery<GetFeedListResult>(this, ((MethodInfo)(MethodInfo.GetCurrentMethod())));
-		}
-	}
-	
-	[global::System.Data.Linq.Mapping.TableAttribute(Name="dbo.CLCity")]
-	public partial class CLCity : INotifyPropertyChanging, INotifyPropertyChanged
-	{
-		
-		private static PropertyChangingEventArgs emptyChangingEventArgs = new PropertyChangingEventArgs(String.Empty);
-		
-		private string _Name;
-		
-		private string _ShortName;
-		
-    #region Extensibility Method Definitions
-    partial void OnLoaded();
-    partial void OnValidate(System.Data.Linq.ChangeAction action);
-    partial void OnCreated();
-    partial void OnNameChanging(string value);
-    partial void OnNameChanged();
-    partial void OnShortNameChanging(string value);
-    partial void OnShortNameChanged();
-    #endregion
-		
-		public CLCity()
-		{
-			OnCreated();
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Name", DbType="VarChar(255) NOT NULL", CanBeNull=false, IsPrimaryKey=true)]
-		public string Name
-		{
-			get
-			{
-				return this._Name;
-			}
-			set
-			{
-				if ((this._Name != value))
-				{
-					this.OnNameChanging(value);
-					this.SendPropertyChanging();
-					this._Name = value;
-					this.SendPropertyChanged("Name");
-					this.OnNameChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_ShortName", DbType="VarChar(255) NOT NULL", CanBeNull=false)]
-		public string ShortName
-		{
-			get
-			{
-				return this._ShortName;
-			}
-			set
-			{
-				if ((this._ShortName != value))
-				{
-					this.OnShortNameChanging(value);
-					this.SendPropertyChanging();
-					this._ShortName = value;
-					this.SendPropertyChanged("ShortName");
-					this.OnShortNameChanged();
-				}
-			}
-		}
-		
-		public event PropertyChangingEventHandler PropertyChanging;
-		
-		public event PropertyChangedEventHandler PropertyChanged;
-		
-		protected virtual void SendPropertyChanging()
-		{
-			if ((this.PropertyChanging != null))
-			{
-				this.PropertyChanging(this, emptyChangingEventArgs);
-			}
-		}
-		
-		protected virtual void SendPropertyChanged(String propertyName)
-		{
-			if ((this.PropertyChanged != null))
-			{
-				this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-			}
+			return this.CreateMethodCallQuery<GetFeedListResult>(this, ((MethodInfo)(MethodInfo.GetCurrentMethod())), iPFilter);
 		}
 	}
 	
@@ -588,11 +502,11 @@ namespace CraigslistAutoPoll
 		
 		private EntitySet<ListingAttribute> _ListingAttributes;
 		
-		private EntityRef<CLCity> _CLCity;
-		
 		private EntityRef<CLSiteSection> _CLSiteSection;
 		
 		private EntityRef<CLSubCity> _CLSubCity;
+		
+		private EntityRef<CLCity> _CLCity;
 		
     #region Extensibility Method Definitions
     partial void OnLoaded();
@@ -619,9 +533,9 @@ namespace CraigslistAutoPoll
 		public Listing()
 		{
 			this._ListingAttributes = new EntitySet<ListingAttribute>(new Action<ListingAttribute>(this.attach_ListingAttributes), new Action<ListingAttribute>(this.detach_ListingAttributes));
-			this._CLCity = default(EntityRef<CLCity>);
 			this._CLSiteSection = default(EntityRef<CLSiteSection>);
 			this._CLSubCity = default(EntityRef<CLSubCity>);
+			this._CLCity = default(EntityRef<CLCity>);
 			OnCreated();
 		}
 		
@@ -810,24 +724,6 @@ namespace CraigslistAutoPoll
 			}
 		}
 		
-		[global::System.Data.Linq.Mapping.AssociationAttribute(Name="CLCity_Listing", Storage="_CLCity", ThisKey="City", OtherKey="Name", IsForeignKey=true)]
-		public CLCity CLCity
-		{
-			get
-			{
-				return this._CLCity.Entity;
-			}
-			set
-			{
-				if ((this._CLCity.Entity != value))
-				{
-					this.SendPropertyChanging();
-					this._CLCity.Entity = value;
-					this.SendPropertyChanged("CLCity");
-				}
-			}
-		}
-		
 		[global::System.Data.Linq.Mapping.AssociationAttribute(Name="CLSiteSection_Listing", Storage="_CLSiteSection", ThisKey="SiteSection", OtherKey="Name", IsForeignKey=true)]
 		public CLSiteSection CLSiteSection
 		{
@@ -864,6 +760,24 @@ namespace CraigslistAutoPoll
 			}
 		}
 		
+		[global::System.Data.Linq.Mapping.AssociationAttribute(Name="CLCity_Listing", Storage="_CLCity", ThisKey="City", OtherKey="Name", IsForeignKey=true)]
+		public CLCity CLCity
+		{
+			get
+			{
+				return this._CLCity.Entity;
+			}
+			set
+			{
+				if ((this._CLCity.Entity != value))
+				{
+					this.SendPropertyChanging();
+					this._CLCity.Entity = value;
+					this.SendPropertyChanged("CLCity");
+				}
+			}
+		}
+		
 		public event PropertyChangingEventHandler PropertyChanging;
 		
 		public event PropertyChangedEventHandler PropertyChanged;
@@ -894,140 +808,6 @@ namespace CraigslistAutoPoll
 		{
 			this.SendPropertyChanging();
 			entity.Listing = null;
-		}
-	}
-	
-	[global::System.Data.Linq.Mapping.TableAttribute(Name="dbo.Proxy")]
-	public partial class Proxy : INotifyPropertyChanging, INotifyPropertyChanged
-	{
-		
-		private static PropertyChangingEventArgs emptyChangingEventArgs = new PropertyChangingEventArgs(String.Empty);
-		
-		private string _IP;
-		
-		private int _Port;
-		
-		private bool _Enabled;
-		
-		private double _Cooldown;
-		
-    #region Extensibility Method Definitions
-    partial void OnLoaded();
-    partial void OnValidate(System.Data.Linq.ChangeAction action);
-    partial void OnCreated();
-    partial void OnIPChanging(string value);
-    partial void OnIPChanged();
-    partial void OnPortChanging(int value);
-    partial void OnPortChanged();
-    partial void OnEnabledChanging(bool value);
-    partial void OnEnabledChanged();
-    partial void OnCooldownChanging(double value);
-    partial void OnCooldownChanged();
-    #endregion
-		
-		public Proxy()
-		{
-			OnCreated();
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_IP", DbType="VarChar(45) NOT NULL", CanBeNull=false, IsPrimaryKey=true)]
-		public string IP
-		{
-			get
-			{
-				return this._IP;
-			}
-			set
-			{
-				if ((this._IP != value))
-				{
-					this.OnIPChanging(value);
-					this.SendPropertyChanging();
-					this._IP = value;
-					this.SendPropertyChanged("IP");
-					this.OnIPChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Port", DbType="Int NOT NULL")]
-		public int Port
-		{
-			get
-			{
-				return this._Port;
-			}
-			set
-			{
-				if ((this._Port != value))
-				{
-					this.OnPortChanging(value);
-					this.SendPropertyChanging();
-					this._Port = value;
-					this.SendPropertyChanged("Port");
-					this.OnPortChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Enabled", DbType="Bit NOT NULL")]
-		public bool Enabled
-		{
-			get
-			{
-				return this._Enabled;
-			}
-			set
-			{
-				if ((this._Enabled != value))
-				{
-					this.OnEnabledChanging(value);
-					this.SendPropertyChanging();
-					this._Enabled = value;
-					this.SendPropertyChanged("Enabled");
-					this.OnEnabledChanged();
-				}
-			}
-		}
-		
-		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Cooldown", DbType="Float NOT NULL")]
-		public double Cooldown
-		{
-			get
-			{
-				return this._Cooldown;
-			}
-			set
-			{
-				if ((this._Cooldown != value))
-				{
-					this.OnCooldownChanging(value);
-					this.SendPropertyChanging();
-					this._Cooldown = value;
-					this.SendPropertyChanged("Cooldown");
-					this.OnCooldownChanged();
-				}
-			}
-		}
-		
-		public event PropertyChangingEventHandler PropertyChanging;
-		
-		public event PropertyChangedEventHandler PropertyChanged;
-		
-		protected virtual void SendPropertyChanging()
-		{
-			if ((this.PropertyChanging != null))
-			{
-				this.PropertyChanging(this, emptyChangingEventArgs);
-			}
-		}
-		
-		protected virtual void SendPropertyChanged(String propertyName)
-		{
-			if ((this.PropertyChanged != null))
-			{
-				this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-			}
 		}
 	}
 	
@@ -1181,6 +961,250 @@ namespace CraigslistAutoPoll
 						this._ListingID = default(long);
 					}
 					this.SendPropertyChanged("Listing");
+				}
+			}
+		}
+		
+		public event PropertyChangingEventHandler PropertyChanging;
+		
+		public event PropertyChangedEventHandler PropertyChanged;
+		
+		protected virtual void SendPropertyChanging()
+		{
+			if ((this.PropertyChanging != null))
+			{
+				this.PropertyChanging(this, emptyChangingEventArgs);
+			}
+		}
+		
+		protected virtual void SendPropertyChanged(String propertyName)
+		{
+			if ((this.PropertyChanged != null))
+			{
+				this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
+			}
+		}
+	}
+	
+	[global::System.Data.Linq.Mapping.TableAttribute(Name="dbo.Proxy")]
+	public partial class Proxy : INotifyPropertyChanging, INotifyPropertyChanged
+	{
+		
+		private static PropertyChangingEventArgs emptyChangingEventArgs = new PropertyChangingEventArgs(String.Empty);
+		
+		private string _IP;
+		
+		private int _Port;
+		
+		private bool _Enabled;
+		
+    #region Extensibility Method Definitions
+    partial void OnLoaded();
+    partial void OnValidate(System.Data.Linq.ChangeAction action);
+    partial void OnCreated();
+    partial void OnIPChanging(string value);
+    partial void OnIPChanged();
+    partial void OnPortChanging(int value);
+    partial void OnPortChanged();
+    partial void OnEnabledChanging(bool value);
+    partial void OnEnabledChanged();
+    #endregion
+		
+		public Proxy()
+		{
+			OnCreated();
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_IP", DbType="VarChar(45) NOT NULL", CanBeNull=false, IsPrimaryKey=true)]
+		public string IP
+		{
+			get
+			{
+				return this._IP;
+			}
+			set
+			{
+				if ((this._IP != value))
+				{
+					this.OnIPChanging(value);
+					this.SendPropertyChanging();
+					this._IP = value;
+					this.SendPropertyChanged("IP");
+					this.OnIPChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Port", DbType="Int NOT NULL")]
+		public int Port
+		{
+			get
+			{
+				return this._Port;
+			}
+			set
+			{
+				if ((this._Port != value))
+				{
+					this.OnPortChanging(value);
+					this.SendPropertyChanging();
+					this._Port = value;
+					this.SendPropertyChanged("Port");
+					this.OnPortChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Enabled", DbType="Bit NOT NULL")]
+		public bool Enabled
+		{
+			get
+			{
+				return this._Enabled;
+			}
+			set
+			{
+				if ((this._Enabled != value))
+				{
+					this.OnEnabledChanging(value);
+					this.SendPropertyChanging();
+					this._Enabled = value;
+					this.SendPropertyChanged("Enabled");
+					this.OnEnabledChanged();
+				}
+			}
+		}
+		
+		public event PropertyChangingEventHandler PropertyChanging;
+		
+		public event PropertyChangedEventHandler PropertyChanged;
+		
+		protected virtual void SendPropertyChanging()
+		{
+			if ((this.PropertyChanging != null))
+			{
+				this.PropertyChanging(this, emptyChangingEventArgs);
+			}
+		}
+		
+		protected virtual void SendPropertyChanged(String propertyName)
+		{
+			if ((this.PropertyChanged != null))
+			{
+				this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
+			}
+		}
+	}
+	
+	[global::System.Data.Linq.Mapping.TableAttribute(Name="dbo.CLCity")]
+	public partial class CLCity : INotifyPropertyChanging, INotifyPropertyChanged
+	{
+		
+		private static PropertyChangingEventArgs emptyChangingEventArgs = new PropertyChangingEventArgs(String.Empty);
+		
+		private string _Name;
+		
+		private string _ShortName;
+		
+		private string _IP;
+		
+		private bool _Enabled;
+		
+    #region Extensibility Method Definitions
+    partial void OnLoaded();
+    partial void OnValidate(System.Data.Linq.ChangeAction action);
+    partial void OnCreated();
+    partial void OnNameChanging(string value);
+    partial void OnNameChanged();
+    partial void OnShortNameChanging(string value);
+    partial void OnShortNameChanged();
+    partial void OnIPChanging(string value);
+    partial void OnIPChanged();
+    partial void OnEnabledChanging(bool value);
+    partial void OnEnabledChanged();
+    #endregion
+		
+		public CLCity()
+		{
+			OnCreated();
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Name", DbType="VarChar(255) NOT NULL", CanBeNull=false, IsPrimaryKey=true)]
+		public string Name
+		{
+			get
+			{
+				return this._Name;
+			}
+			set
+			{
+				if ((this._Name != value))
+				{
+					this.OnNameChanging(value);
+					this.SendPropertyChanging();
+					this._Name = value;
+					this.SendPropertyChanged("Name");
+					this.OnNameChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_ShortName", DbType="VarChar(255) NOT NULL", CanBeNull=false)]
+		public string ShortName
+		{
+			get
+			{
+				return this._ShortName;
+			}
+			set
+			{
+				if ((this._ShortName != value))
+				{
+					this.OnShortNameChanging(value);
+					this.SendPropertyChanging();
+					this._ShortName = value;
+					this.SendPropertyChanged("ShortName");
+					this.OnShortNameChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_IP", DbType="VarChar(15)")]
+		public string IP
+		{
+			get
+			{
+				return this._IP;
+			}
+			set
+			{
+				if ((this._IP != value))
+				{
+					this.OnIPChanging(value);
+					this.SendPropertyChanging();
+					this._IP = value;
+					this.SendPropertyChanged("IP");
+					this.OnIPChanged();
+				}
+			}
+		}
+		
+		[global::System.Data.Linq.Mapping.ColumnAttribute(Storage="_Enabled", DbType="Bit NOT NULL")]
+		public bool Enabled
+		{
+			get
+			{
+				return this._Enabled;
+			}
+			set
+			{
+				if ((this._Enabled != value))
+				{
+					this.OnEnabledChanging(value);
+					this.SendPropertyChanging();
+					this._Enabled = value;
+					this.SendPropertyChanged("Enabled");
+					this.OnEnabledChanged();
 				}
 			}
 		}

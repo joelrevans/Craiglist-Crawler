@@ -18,12 +18,30 @@ namespace SubCityGenerator
     {
         static void Main(string[] args)
         {
+            GetDomainAddresses();
+        }
+
+        static void GetDomainAddresses()
+        {
+            DataAccessDataContext dadc = new DataAccessDataContext();
+            StringBuilder sb = new StringBuilder();
+            foreach(CLCity city in dadc.CLCities)
+            {
+                IPHostEntry ipe = Dns.GetHostEntry(city.Name + ".craigslist.org");
+                sb.AppendLine(city.Name.PadRight(15) + string.Join<IPAddress>(", ", ipe.AddressList));
+                city.IP = ipe.AddressList.FirstOrDefault().ToString();
+            }
+            dadc.SubmitChanges();
+            File.WriteAllText("CityAddresses.txt", sb.ToString());
+        }
+
+        static void GetSubCities()
+        {
             DataAccessDataContext dadc = new DataAccessDataContext();
             StringBuilder sb = new StringBuilder();
 
-            foreach(CLCity city in dadc.CLCities)
+            foreach (CLCity city in dadc.CLCities)
             {
-                Console.WriteLine(city.Name);
                 WebClient wc = new WebClient();
                 string ret = wc.DownloadString("http://" + city.Name + ".craigslist.org/search/sss");
                 HtmlDocument hd = new HtmlDocument();
@@ -37,7 +55,7 @@ namespace SubCityGenerator
                 {
                     sb.AppendLine(hn.Attributes["value"].Value + ", " + city.Name);
                 }
-                File.WriteAllText("citybits.txt", sb.ToString());
+                File.WriteAllText("SubCities.txt", sb.ToString());
             }
         }
     }

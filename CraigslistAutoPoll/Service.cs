@@ -23,23 +23,16 @@ namespace CraigslistAutoPoll
             public HttpWebRequest request;
             public object parameters;
             public Stopwatch stopwatch;
+            public IWebProxy proxy;
+            public string IP;
+            public DataAccessDataContext DataContext;
         }
 
-        public LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>> FeedQueue = new LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>();
-        public Queue<Listing> ListingInfoQueue = new Queue<Listing>();
-        public Queue<Listing> ListingBodyQueue = new Queue<Listing>();
         public Dictionary<Listing, int> ListingFailures = new Dictionary<Listing, int>();
 
-        public Queue<WebProxy> Proxies = new Queue<WebProxy>();
-        public Hashtable ProxyCooldowns = new Hashtable();
+        public int ConnectionCooldown;
 
-        public int AvailableConnections = 0;
-
-        public List<long> PostingIds = null;
-        DataAccessDataContext dadc = new DataAccessDataContext();
-        object key = new object();
-
-#if DEBUG
+        //The following four sets of properties are used to benchmark the application.
         int parseFeedProcessingCount = 0;
         TimeSpan parseFeedProcessingTime = new TimeSpan();
 
@@ -51,18 +44,33 @@ namespace CraigslistAutoPoll
 
         int parseInfoConnectionCount = 0;
         TimeSpan parseInfoConnectionTime = new TimeSpan();
-#endif
 
-        
+        //These dictionaries are used to cache objects by IP for each datacontext.  Each context needs its own reference to support multithreading.
+        Dictionary<string, CLSubCity[]> SubCities = new Dictionary<string,CLSubCity[]>();
+        Dictionary<string, CLCity[]> Cities = new Dictionary<string,CLCity[]>();
+        Dictionary<string, CLSiteSection[]> SiteSections = new Dictionary<string,CLSiteSection[]>();
+
+        //Contains all feeds to be parsed, grouped in a dictionary by IP address.
+        public Dictionary<string, LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>> FeedQueues = new Dictionary<string, LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>>();
+        public Dictionary<string, Queue<Listing>> ListingQueues = new Dictionary<string, Queue<Listing>>();
+
+        //Thread lockers.
+        object MasterKey = new object();
+        object EventLogKey = new object();
+        Dictionary<string, object> KeyChain = new Dictionary<string, object>();
+
+        //These lists are caches like the above, but may be used globally for all datacontexts.
+        string[] IPs = null;
+        public List<long> CompletedListingIds = null;    //A list of all existing posting IDs, used to prevent double-parsing.
+
         public Service()
         {
             InitializeComponent();            
         }
 
-
         protected override void OnStart(string[] args)
         {
-            init(); //We put the init into a function so that Tester project may debug the code.
+            init(); //We put the init into a function so that Tester project may call init to debug the code.
         }
 
         protected override void OnStop() {}
@@ -71,55 +79,73 @@ namespace CraigslistAutoPoll
         {
             EventLog.Source = "Craigslist Crawler";
             ServicePointManager.DefaultConnectionLimit = int.MaxValue;
-            //ServicePointManager.MaxServicePointIdleTime = 0;// Properties.Settings.Default.ConnectionTimeout;
             ServicePointManager.Expect100Continue = false;
             ServicePointManager.CheckCertificateRevocationList = false;
 
-            AvailableConnections = Properties.Settings.Default.MaxConcurrentConnections;
+            ConnectionCooldown = Properties.Settings.Default.ConnectionCooldown;
 
             try
             {
-                foreach (Proxy prox in dadc.Proxies)
+                DataAccessDataContext dadc = new DataAccessDataContext();
+                CompletedListingIds = dadc.Listings.Select(x => x.Id).ToList();
+                IPs = dadc.CLCities.Where(x => x.Enabled).Select(x => x.IP).Distinct().ToArray();
+                var proxies = dadc.Proxies.Where(x => x.Enabled).ToArray();
+
+                foreach (string ip in IPs)
                 {
-                    if (prox.Enabled)
+                    DataAccessDataContext datacontext = new DataAccessDataContext();
+                    FeedQueues[ip] = new LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>();
+                    ListingQueues[ip] = new Queue<Listing>();
+
+                    Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled && x.IP == ip).ToArray());
+                    SubCities.Add(ip, datacontext.CLSubCities.ToArray());
+                    SiteSections.Add(ip, datacontext.CLSiteSections.Where(x => x.Enabled).ToArray());
+                    KeyChain.Add(ip, new object());
+
+                    BuildFeedQueue(ip, datacontext);
+                    if (proxies.Length > 0)
                     {
-                        WebProxy wp = new WebProxy(prox.IP, prox.Port);
-                        Proxies.Enqueue(wp);
-                        ProxyCooldowns.Add(wp, prox.Cooldown);
+                        foreach (Proxy prox in proxies)
+                        {
+                            FetchNextWhatchamacallit(ip, new WebProxy(prox.IP, prox.Port), datacontext);
+                        }
+                    }
+                    else
+                    {
+                        FetchNextWhatchamacallit(ip, null, datacontext);
                     }
                 }
-
-                PostingIds = dadc.Listings.Select(x => x.Id).ToList();
             }
             catch (Exception ex)
             {
-                EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + ex.Message, EventLogEntryType.Error);
+                lock (EventLogKey)
+                {
+                    EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + ex.Message, EventLogEntryType.Error);
+                }
+                return;
             }
 
-            try
+            lock (EventLogKey)
             {
-                FetchNextWhatchamacallit();
-            }
-            catch (Exception ex)
-            {
-                EventLog.WriteEntry(ex.Message);
+                EventLog.WriteEntry("Initialization Success!");
             }
         }
 
-        private void SubmitData()
+        private void SubmitData(DataAccessDataContext DataContext)
         {
             try
             {
-                if (dadc.GetChangeSet().Inserts.OfType<Listing>().Count() >= Properties.Settings.Default.MinSubmissionBundleSize)
+                lock (MasterKey)
                 {
-                    dadc.SubmitChanges();
+                    if (DataContext.GetChangeSet().Inserts.OfType<Listing>().Count() >= Properties.Settings.Default.MinSubmissionBundleSize)
+                        DataContext.SubmitChanges();
                 }
             }
             catch (Exception ex)
             {
                 StringBuilder debugmsg = new StringBuilder();
                 /*The following is too large to use normally and may surpass the event log character limit.*/
-                foreach (Listing li in dadc.GetChangeSet().Inserts.OfType<Listing>())
+                foreach (Listing li in DataContext.GetChangeSet().Inserts.OfType<Listing>())
                 {
                     debugmsg.Append("[" + li.Id + "]:  " + li.Title + "\n");
                     foreach (ListingAttribute la in li.ListingAttributes.OrderBy(x => x.Name))
@@ -133,161 +159,146 @@ namespace CraigslistAutoPoll
                     debugmsg.Remove(short.MaxValue - 200, debugmsg.Length - (short.MaxValue-200));
                 }
 
-                EventLog.WriteEntry("Failed to submit new listings to database.\n\n" + ex.Message + "\n\n" + debugmsg.ToString(), EventLogEntryType.Error);
+                lock (EventLogKey)
+                {
+                    EventLog.WriteEntry("Failed to submit new listings to database.\n\n" + ex.Message + "\n\n" + debugmsg.ToString(), EventLogEntryType.Error);
+                }
             }
         }
 
-        public void FetchNextWhatchamacallit()
+        public void FetchNextWhatchamacallit(string IP, IWebProxy proxy, DataAccessDataContext DataContext)
         {
-            while (ListingInfoQueue.Count > 0 && AvailableConnections > 0)
+            Queue<Listing> ListingQueue = ListingQueues[IP];
+
+            lock (KeyChain[IP])
             {
-                HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + ListingInfoQueue.Peek().CLCity.Name + ".craigslist.org/" + (ListingInfoQueue.Peek().CLSubCity == null ? "" : (ListingInfoQueue.Peek().CLSubCity.SubCity + "/")) + ListingInfoQueue.Peek().CLSiteSection.Name + "/" + ListingInfoQueue.Peek().Id.ToString() + ".html");
+                if (ListingQueue.Count > 0)
                 {
-                    if (Proxies.Count > 0)
+                    HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + ListingQueue.Peek().CLCity.Name + ".craigslist.org/" + (ListingQueue.Peek().CLSubCity == null ? "" : (ListingQueue.Peek().CLSubCity.SubCity + "/")) + ListingQueue.Peek().CLSiteSection.Name + "/" + ListingQueue.Peek().Id.ToString() + ".html");
                     {
-                        hwr.Proxy = Proxies.Peek();
-                        Proxies.Enqueue(Proxies.Dequeue());
-                    }
-                    else
-                        hwr.Proxy = null;
-                    hwr.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                    hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
-                    AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = ListingInfoQueue.Peek() };
-#if DEBUG
-                    ars.stopwatch = new Stopwatch();
-                    ars.stopwatch.Start();
-#endif
-                    hwr.BeginGetResponse(new AsyncCallback(ParseListingInfo), ars);
-                }
-                AvailableConnections--;
-                ListingInfoQueue.Dequeue();
-            }
+                        hwr.Proxy = proxy;
+                        hwr.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                        hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
+                        hwr.KeepAlive = false;
+                        hwr.UserAgent = Properties.Settings.Default.UserAgent;
 
-            while (AvailableConnections > 0)
-            {
-                if (FeedQueue.Count == 0)
+                        AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = ListingQueue.Peek(), IP = IP, proxy = proxy, DataContext = DataContext };
+
+                        ars.stopwatch = new Stopwatch();
+                        ars.stopwatch.Start();
+
+                        hwr.BeginGetResponse(new AsyncCallback(ParseListingInfo), ars);
+
+                    }
+                    ListingQueue.Dequeue();
+                }
+                else
                 {
-                    try
-                    {
-                        var feedlist = dadc.GetFeedList().OrderBy(x=>(x.Timestamp==null?((DateTime)SqlDateTime.MinValue):x.Timestamp));
-                        CLSubCity[] subcities = dadc.CLSubCities.ToArray();
-                        CLCity[] cities = dadc.CLCities.ToArray();
-                        CLSiteSection[] sitesections = dadc.CLSiteSections.ToArray();
 
-                        foreach (var item in feedlist)
-                            FeedQueue.AddLast(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(sitesections.First(x => x.Name == item.SiteSection), cities.First(x => x.Name == item.City), 0, item.Timestamp, subcities.FirstOrDefault(x => x.SubCity == item.SubCity)));
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + ex.Message, EventLogEntryType.Error);
-                        return;
-                    }
-                }
+                    if (FeedQueues[IP].Count == 0)
+                        BuildFeedQueue(IP, DataContext);
 
-                HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + FeedQueue.First.Value.Item2.Name + ".craigslist.org/search/" + (FeedQueue.First.Value.Item5 == null ? "" : (FeedQueue.First.Value.Item5.SubCity + "/")) + FeedQueue.First.Value.Item1.Name + "?s=" + FeedQueue.First.Value.Item3.ToString());
-                {
-                    if (Proxies.Count > 0)
+                    var selectedItem = FeedQueues[IP].First;
+                    HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + selectedItem.Value.Item2.Name + ".craigslist.org/search/" + (selectedItem.Value.Item5 == null ? "" : (selectedItem.Value.Item5.SubCity + "/")) + selectedItem.Value.Item1.Name + "?s=" + selectedItem.Value.Item3.ToString());
+
                     {
-                        hwr.Proxy = Proxies.Peek();
-                        Proxies.Enqueue(Proxies.Dequeue());
+                        hwr.Proxy = proxy;
+                        hwr.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                        hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
+                        hwr.KeepAlive = false;
+                        hwr.UserAgent = Properties.Settings.Default.UserAgent;
+                        AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = selectedItem.Value, IP = IP, proxy = proxy, DataContext = DataContext };
+
+                        ars.stopwatch = new Stopwatch();
+                        ars.stopwatch.Start();
+
+                        hwr.BeginGetResponse(new AsyncCallback(ParseFeed), ars);
                     }
-                    else
-                        hwr.Proxy = null;
-                    hwr.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                    hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
-                    AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = FeedQueue.First.Value };
-#if DEBUG
-                    ars.stopwatch = new Stopwatch();
-                    ars.stopwatch.Start();
-#endif
-                    hwr.BeginGetResponse(new AsyncCallback(ParseFeed), ars);
+                    FeedQueues[IP].RemoveFirst();
                 }
-                AvailableConnections--;
-                FeedQueue.RemoveFirst();
             }
         }
 
         private void ParseFeed(IAsyncResult AsyncResult)
-        {
+        {    
+            bool banned403 = false;
+
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
             AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
             try
             {
-                AvailableConnections++;
-                lock (key)
+                ars.stopwatch.Stop();
+                parseFeedConnectionCount++;
+                parseFeedConnectionTime += ars.stopwatch.Elapsed;
+
+                Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity> feedResource = (Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>)ars.parameters;
+                CLSiteSection SiteSection = feedResource.Item1;
+                CLCity City = feedResource.Item2;
+                int depth = feedResource.Item3;
+                DateTime lastStamp = feedResource.Item4;
+                CLSubCity subCity = feedResource.Item5;
+
+                HtmlDocument response = new HtmlDocument();
+                try
                 {
-#if DEBUG
-                    ars.stopwatch.Stop();
-                    parseFeedConnectionCount++;
-                    parseFeedConnectionTime += ars.stopwatch.Elapsed;
-#endif
-
-                    Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity> feedResource = (Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>)ars.parameters;
-                    CLSiteSection SiteSection = feedResource.Item1;
-                    CLCity City = feedResource.Item2;
-                    int depth = feedResource.Item3;
-                    DateTime lastStamp = feedResource.Item4;
-                    CLSubCity subCity = feedResource.Item5;
-
-                    HtmlDocument response = new HtmlDocument();
-                    try
+                    using (WebResponse wr = ars.request.EndGetResponse(AsyncResult))
                     {
-                        using (WebResponse wr = ars.request.EndGetResponse(AsyncResult))
+                        using (Stream stream = wr.GetResponseStream())
                         {
-                            using (Stream stream = wr.GetResponseStream())
+                            using (StreamReader sr = new StreamReader(stream))
                             {
-                                using (StreamReader sr = new StreamReader(stream))
-                                {
-                                    response.LoadHtml(sr.ReadToEnd());                                    
-                                }
+                                response.LoadHtml(sr.ReadToEnd());
                             }
                         }
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message.Contains("(403)"))    //If a 403 occurs, remove the proxy from operation.
                     {
-                        if (ex.Message.Contains("(403)") && Properties.Settings.Default.DisableForbiddenProxies)    //If a 403 occurs, remove the proxy from operation.
+                        if (Properties.Settings.Default.DisabledBannedProxies)
                         {
                             WebProxy wp = (WebProxy)ars.request.Proxy;
-                            for (int i = 0; i < Proxies.Count; ++i)
-                            {
-                                if (Proxies.Peek() == wp)
-                                {
-                                    Proxy selectedProxy = dadc.Proxies.FirstOrDefault(x => x.IP == Proxies.Peek().Address.Host && x.Port == Proxies.Peek().Address.Port);
-                                    if (selectedProxy != null)
-                                    {
-                                        selectedProxy.Enabled = false;
-                                        dadc.SubmitChanges();
-                                    }
 
-                                    Proxies.Dequeue();
-                                    if (Proxies.Count == 0)
-                                        return;
-                                    Proxies.Enqueue(Proxies.Dequeue());
-                                    break;
+                            Proxy selectedProxy = ars.DataContext.Proxies.FirstOrDefault(x => x.IP == wp.Address.Host && x.Port == wp.Address.Port);
+                            if (selectedProxy != null)
+                            {
+                                selectedProxy.Enabled = false;
+                                lock (KeyChain[ars.IP])
+                                {
+                                    lock (MasterKey)
+                                    {
+                                        ars.DataContext.SubmitChanges();
+                                    }
                                 }
-                                Proxies.Enqueue(Proxies.Dequeue());
                             }
                         }
+                        banned403 = true;
+                        return;
+                    }
 
+                    lock (EventLogKey)
+                    {
                         EventLog.WriteEntry("An error has occurred while retreiving a feed:\n\n" + ex.Message + "\n\n" + (ex.InnerException == null ? "" : ex.InnerException.Message)
                             + "\n\n" + SiteSection.Name + "\n" + City.Name + "\n" + depth.ToString(), EventLogEntryType.Warning);
-                        return;
                     }
+                    return;
+                }
 
+                HtmlNodeCollection rows = response.DocumentNode.SelectNodes("//p[@class='row' and @data-pid]");
 
-                    HtmlNodeCollection rows = response.DocumentNode.SelectNodes("//p[@class='row' and @data-pid]");
+                if (rows == null)
+                {
+                    //The eventlog below is not necessarily true.  It's possible that the end of the feeds has been reached and there are no more listings.
+                    //EventLog.WriteEntry("Error while parsing feed.  No connection errors thrown, but no results returned either.\n" + SiteSection.Name + "\n" + City.Name + "\n" + (subCity==null?"":("\n"+subCity.SubCity)) + "\n" + depth.ToString());
+                    return;
+                }
+                bool NoUpdateTimesPosted = false;
 
-                    if (rows == null)
-                    {
-                        //The eventlog below is not necessarily true.  It's possible that the end of the feeds has been reached and there are no more listings.
-                        //EventLog.WriteEntry("Error while parsing feed.  No connection errors thrown, but no results returned either.\n" + SiteSection.Name + "\n" + City.Name + "\n" + (subCity==null?"":("\n"+subCity.SubCity)) + "\n" + depth.ToString());
-                        return;
-                    }
-                    bool NoUpdateTimesPosted = false;
-                    foreach (HtmlNode row in rows)
-                    {
+                foreach (HtmlNode row in rows)
+                {
                         if (row.SelectSingleNode("a").Attributes["href"].Value.Contains("craigslist.org"))
                         {   //This condition deals with "Nearby Areas".  Links within the locale are relative -> /<sectionCode>/<Id>.html, whereas out of the locale are global -> http://<city.Name>/craigslist.org/<sectionCode>/<Id>.html
                             return;
@@ -306,7 +317,10 @@ namespace CraigslistAutoPoll
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Failure to parse listing update time.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Error);
+                            lock (EventLogKey)
+                            {
+                                EventLog.WriteEntry("Failure to parse listing update time.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Error);
+                            }
                             return;
                         }
 
@@ -317,15 +331,20 @@ namespace CraigslistAutoPoll
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Listing has an invalid ID:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                            lock (EventLogKey)
+                            {
+                                EventLog.WriteEntry("Listing has an invalid ID:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                            }
                             continue;
                         }
 
-                        if (PostingIds.Contains(listingSource.Id))
+                        lock (KeyChain[ars.IP])
                         {
-                            continue;
+                            if (CompletedListingIds.Contains(listingSource.Id) || ListingQueues[ars.IP].Any(x=>x.Id==listingSource.Id))
+                            {
+                                continue;
+                            }
                         }
-
                         //PRICE
                         {
                             HtmlNode hn = row.SelectSingleNode("span[@class='txt']/span[@class='l2']/span[@class='price']");
@@ -344,7 +363,10 @@ namespace CraigslistAutoPoll
                                 }
                                 catch (Exception ex)
                                 {
-                                    EventLog.WriteEntry("Error parsing price listing data:  " + hn.InnerText.Replace("$", "").Replace(@"&#x0024;", "") + "\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                                    lock (EventLogKey)
+                                    {
+                                        EventLog.WriteEntry("Error parsing price listing data:  " + hn.InnerText.Replace("$", "").Replace(@"&#x0024;", "") + "\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                                    }
                                 }
                             }
                         }
@@ -360,13 +382,17 @@ namespace CraigslistAutoPoll
                                 }
                                 catch (Exception ex)
                                 {
-                                    EventLog.WriteEntry("Error parsing listing locale data:  " + hn.InnerText.Replace("(", "").Replace(")", "").Trim() + "\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                                    lock (EventLogKey)
+                                    {
+                                        EventLog.WriteEntry("Error parsing listing locale data:  " + hn.InnerText.Replace("(", "").Replace(")", "").Trim() + "\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                                    }
                                 }
                             }
                         }
 
                         //HAS PICTURE, HAS MAP
-                        try{
+                        try
+                        {
                             HtmlNode hn = row.SelectSingleNode("span[@class='txt']/span[@class='l2']/span[@class='pnr']/span[@class='px']/span[@class='p']");
                             if (hn != null)
                             {
@@ -382,7 +408,10 @@ namespace CraigslistAutoPoll
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Error while parsing pic and map presence:\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                            lock (EventLogKey)
+                            {
+                                EventLog.WriteEntry("Error while parsing pic and map presence:\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                            }
                         }
 
                         //TITLE
@@ -392,240 +421,285 @@ namespace CraigslistAutoPoll
                         }
                         catch (Exception ex)
                         {
-                            EventLog.WriteEntry("Listing skipped.  Error parsing title from listing.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                            lock (EventLogKey)
+                            {
+                                EventLog.WriteEntry("Listing skipped.  Error parsing title from listing.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                            }
                             continue;
                         }
 
-                        ListingInfoQueue.Enqueue(listingSource);
+                        ListingQueues[ars.IP].Enqueue(listingSource);
+
                     }
-                    //If the for loop completes without a return, the next page needs to be looked at
-                    if(NoUpdateTimesPosted == false)
-                        FeedQueue.AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 100, feedResource.Item4, feedResource.Item5));
-                }
+
+                //If the for loop completes without a return, the next page needs to be looked at
+                if (NoUpdateTimesPosted == false)
+                    FeedQueues[ars.IP].AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 100, feedResource.Item4, feedResource.Item5));
                 
             }
             catch (Exception ex)
             {
-                EventLog.WriteEntry("An error has occurred while parsing the feed:\n\n" + PrintException(ex), EventLogEntryType.Error);
+                lock (EventLogKey)
+                {
+                    EventLog.WriteEntry("An error has occurred while parsing the feed:\n\n" + PrintException(ex), EventLogEntryType.Error);
+                }
             }
             finally
             {
-                
-#if DEBUG
                 sw.Stop();
                 parseFeedProcessingTime += sw.Elapsed;
                 parseFeedProcessingCount++;
-#endif
-                if ((double)ProxyCooldowns[ars.request.Proxy] > 0)
-                    Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
+
+                if (ConnectionCooldown > 0 && sw.Elapsed < TimeSpan.FromMilliseconds(ConnectionCooldown))
+                    Thread.Sleep(TimeSpan.FromMilliseconds(ConnectionCooldown) - sw.Elapsed);
 
                 try
                 {
-                    FetchNextWhatchamacallit();
+                    if (banned403 == false)
+                        FetchNextWhatchamacallit(ars.IP, ars.proxy, ars.DataContext);
                 }
                 catch (Exception ex)
                 {
-                    EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + PrintException(ex));
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + PrintException(ex));
+                    }
                 }
             }
         }
 
         public void ParseListingInfo(IAsyncResult AsyncResult)
         {
-#if DEBUG
+            bool banned403 = false;
             Stopwatch sw = new Stopwatch();
             sw.Start();
-#endif 
+
             AsyncRequestStruct ars = (AsyncRequestStruct)AsyncResult.AsyncState;
             try
             {
-                AvailableConnections++;
-                lock (key)
+                ars.stopwatch.Stop();
+                parseInfoConnectionCount++;
+                parseInfoConnectionTime += ars.stopwatch.Elapsed;
+
+                Listing listingSource = (Listing)ars.parameters;
+
+                HtmlDocument response = new HtmlDocument();
+                try
                 {
-
-                    
-#if DEBUG
-                    ars.stopwatch.Stop();
-                    parseInfoConnectionCount++;
-                    parseInfoConnectionTime += ars.stopwatch.Elapsed;
-#endif
-
-                    Listing listingSource = (Listing)ars.parameters;
-
-                    HtmlDocument response = new HtmlDocument();
-                    try
+                    using (WebResponse wr = ars.request.EndGetResponse(AsyncResult))
                     {
-                        using (WebResponse wr = ars.request.EndGetResponse(AsyncResult))
+                        using (Stream stream = wr.GetResponseStream())
                         {
-                            using (Stream stream = wr.GetResponseStream())
+                            using (StreamReader sr = new StreamReader(stream))
                             {
-                                using (StreamReader sr = new StreamReader(stream))
-                                {
-                                    response.LoadHtml(sr.ReadToEnd());
-                                }
+                                response.LoadHtml(sr.ReadToEnd());
                             }
                         }
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message.Contains("(403)"))    //If a 403 occurs, remove the proxy from operation.
                     {
-                        if (ex.Message.Contains("(403)") && Properties.Settings.Default.DisableForbiddenProxies)    //If a 403 occurs, remove the proxy from operation.
+                        if(Properties.Settings.Default.DisabledBannedProxies)
                         {
                             WebProxy wp = (WebProxy)ars.request.Proxy;
-                            for (int i = 0; i < Proxies.Count; ++i)
+                            lock (KeyChain[ars.IP])
                             {
-                                if (Proxies.Peek() == wp)
+                                Proxy selectedProxy = ars.DataContext.Proxies.FirstOrDefault(x => x.IP == wp.Address.Host && x.Port == wp.Address.Port);
+                                if (selectedProxy != null)
                                 {
-                                    Proxy selectedProxy = dadc.Proxies.FirstOrDefault(x => x.IP == Proxies.Peek().Address.Host && x.Port == Proxies.Peek().Address.Port);
-                                    if (selectedProxy != null)
-                                        selectedProxy.Enabled = false;
+                                    selectedProxy.Enabled = false;
 
-                                    Proxies.Dequeue();
-                                    if (Proxies.Count == 0)
-                                        return;
-                                    Proxies.Enqueue(Proxies.Dequeue());
-                                    break;
+                                    lock (MasterKey)
+                                    {
+                                        ars.DataContext.SubmitChanges();
+                                    }
+
                                 }
-                                Proxies.Enqueue(Proxies.Dequeue());
                             }
                         }
-
-                        if (ListingFailures.Keys.Contains(listingSource))
-                        {
-                            ListingFailures[listingSource]++;
-                            if (ListingFailures[listingSource] > Properties.Settings.Default.MaxListingRetries)
-                            {
-                                ListingFailures.Remove(listingSource);
-                            }
-                            else
-                            {
-                                ListingInfoQueue.Enqueue(listingSource);
-                            }
-                        }
-                        else
-                        {
-                            ListingFailures.Add(listingSource, 1);
-                            ListingInfoQueue.Enqueue(listingSource);
-                        }
-
-                        EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                        banned403 = true;
                         return;
                     }
 
-                    //LISTING WAS DELETED
+
+                    if (ListingFailures.Keys.Contains(listingSource))
                     {
-                        HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@class='removed']");
-                        if (hn != null)
-                            return;
+                        ListingFailures[listingSource]++;
+                        if (ListingFailures[listingSource] > Properties.Settings.Default.MaxConnectionRetries)
+                        {
+                            ListingFailures.Remove(listingSource);
+                        }
+                        else
+                        {
+                            ListingQueues[ars.IP].Enqueue(listingSource);
+                        }
+                    }
+                    else
+                    {
+                        ListingFailures.Add(listingSource, 1);
+                        ListingQueues[ars.IP].Enqueue(listingSource);
                     }
 
-                    //GPS COORDINATES
-                    if (listingSource.ListingAttributes.Any(x => x.Name == "Has Map"))
+                    lock (MasterKey)
                     {
-                        try
+                        lock (EventLogKey)
                         {
-                            HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@id='map' and @data-latitude and @data-longitude and @data-accuracy]");
-                            listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Latitude", Value = hn.Attributes["data-latitude"].Value });
-                            listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Longitude", Value = hn.Attributes["data-longitude"].Value });
-                            listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Location Accuracy", Value = hn.Attributes["data-accuracy"].Value });
+                            EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                         }
-                        catch (Exception ex)
+                    }
+                    return;
+                }
+
+                //LISTING WAS DELETED
+                {
+                    HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@class='removed']");
+                    if (hn != null)
+                        return;
+                }
+
+                //GPS COORDINATES
+                if (listingSource.ListingAttributes.Any(x => x.Name == "Has Map"))
+                {
+                    try
+                    {
+                        HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@id='map' and @data-latitude and @data-longitude and @data-accuracy]");
+                        listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Latitude", Value = hn.Attributes["data-latitude"].Value });
+                        listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Longitude", Value = hn.Attributes["data-longitude"].Value });
+                        listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Location Accuracy", Value = hn.Attributes["data-accuracy"].Value });
+                    }
+                    catch (Exception ex)
+                    {
+                        lock (EventLogKey)
                         {
                             EventLog.WriteEntry("Error parsing GPS coordinates:\n\n" + PrintException(ex) + PrintListing(listingSource));
                         }
                     }
+                }
 
-                    //ADDRESS
+                //ADDRESS
+                {
+                    HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@class='mapaddress']");
+                    if (hn != null)
                     {
-                        HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@class='mapaddress']");
-                        if (hn != null)
+                        try
                         {
-                            try
-                            {
-                                listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Address", Value = hn.InnerText });
-                            }
-                            catch (Exception ex)
+                            listingSource.ListingAttributes.Add(new ListingAttribute() { Name = "Address", Value = hn.InnerText });
+                        }
+                        catch (Exception ex)
+                        {
+                            lock (EventLogKey)
                             {
                                 EventLog.WriteEntry("Error parsing map address: \n\n" + ex.Message);
                             }
                         }
                     }
-
-                    //POSTDATE
-                    try
-                    {
-                        listingSource.PostDate = DateTime.Parse(response.DocumentNode.SelectSingleNode("//p[@id='display-date']/time").Attributes["datetime"].Value);
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLog.WriteEntry("Listing skipped.  Post date could not be identified or parsed.\n\n" + PrintException(ex) + PrintListing(listingSource) + ex.Message, EventLogEntryType.Warning);
-                        return;
-                    }
-
-                    int[] yearList = Enumerable.Range(1900, 120).ToArray();
-                    HtmlNodeCollection hnc = response.DocumentNode.SelectNodes("//p[@class='attrgroup']/span");
-                    if (hnc == null) return;  //returns NULL if no nodes exist.
-
-                    foreach (HtmlNode hn in hnc)
-                    {
-                        string[] parts = hn.InnerText.Split(':');
-                        if (parts.Length == 2)
-                        {
-                            listingSource.ListingAttributes.Add(
-                                new ListingAttribute()
-                                {
-                                    Name = parts[0].Trim(),
-                                    Value = parts[1].Trim()
-                                }
-                            );
-                        }
-                        else if (parts.Length == 1)     //More ads by this user is styled like an attribute, but is actually just a link.  It provides no info besides userid.
-                        {
-                            listingSource.ListingAttributes.Add(
-                                new ListingAttribute()
-                                {
-                                    Name = "Unspecified",
-                                    Value = parts[0].Trim()
-                                }
-                            );
-                        }
-                    }
-
-                    //BODY
-                    try
-                    {
-                        HtmlNode hn = response.DocumentNode.SelectSingleNode("//section[@id='postingbody']");
-                        listingSource.Body = hn.InnerText;
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLog.WriteEntry("An error has occurred while parsing the listing body: \n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
-                    }
-
-                    if (PostingIds.Contains(listingSource.Id) == false)
-                    {
-                        dadc.Listings.InsertOnSubmit(listingSource);
-                        PostingIds.Add(listingSource.Id);
-                        SubmitData();
-                    }
                 }
-            }
-            finally
-            {
-#if DEBUG
-                sw.Stop();
-                parseInfoProcessingTime += sw.Elapsed;
-                parseInfoProcessingCount++;
-#endif
-                if((double)ProxyCooldowns[ars.request.Proxy] > 0)
-                    Thread.Sleep(TimeSpan.FromSeconds((double)ProxyCooldowns[ars.request.Proxy]) - sw.Elapsed);
 
+                //POSTDATE
                 try
                 {
-                    FetchNextWhatchamacallit();
+                    listingSource.PostDate = DateTime.Parse(response.DocumentNode.SelectSingleNode("//p[@id='display-date']/time").Attributes["datetime"].Value);
                 }
                 catch (Exception ex)
                 {
-                    EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + ex.Message);
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("Listing skipped.  Post date could not be identified or parsed.\n\n" + PrintException(ex) + PrintListing(listingSource) + ex.Message, EventLogEntryType.Warning);
+                    }
+                    return;
+                }
+
+                int[] yearList = Enumerable.Range(1900, 120).ToArray();
+                HtmlNodeCollection hnc = response.DocumentNode.SelectNodes("//p[@class='attrgroup']/span");
+                if (hnc == null) return;  //returns NULL if no nodes exist.
+
+                foreach (HtmlNode hn in hnc)
+                {
+                    string[] parts = hn.InnerText.Split(':');
+                    if (parts.Length == 2)
+                    {
+                        listingSource.ListingAttributes.Add(
+                            new ListingAttribute()
+                            {
+                                Name = parts[0].Trim(),
+                                Value = parts[1].Trim()
+                            }
+                        );
+                    }
+                    else if (parts.Length == 1)     //More ads by this user is styled like an attribute, but is actually just a link.  It provides no info besides userid.
+                    {
+                        listingSource.ListingAttributes.Add(
+                            new ListingAttribute()
+                            {
+                                Name = "Unspecified",
+                                Value = parts[0].Trim()
+                            }
+                        );
+                    }
+                }
+
+                //BODY
+                try
+                {
+                    HtmlNode hn = response.DocumentNode.SelectSingleNode("//section[@id='postingbody']");
+                    listingSource.Body = hn.InnerText;
+                }
+                catch (Exception ex)
+                {
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("An error has occurred while parsing the listing body: \n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                    }
+                }
+                lock (KeyChain[ars.IP])
+                {
+                    ars.DataContext.Listings.InsertOnSubmit(listingSource);
+                    CompletedListingIds.Add(listingSource.Id);
+                    SubmitData(ars.DataContext);
+                }
+
+            }
+            finally
+            {
+
+                sw.Stop();
+                parseInfoProcessingTime += sw.Elapsed;
+                parseInfoProcessingCount++;
+
+                if (ConnectionCooldown > 0 && sw.Elapsed < TimeSpan.FromMilliseconds(ConnectionCooldown))
+                    Thread.Sleep(TimeSpan.FromMilliseconds(ConnectionCooldown) - sw.Elapsed);
+
+                try
+                {
+                    if (banned403 == false)
+                        FetchNextWhatchamacallit(ars.IP, ars.proxy, ars.DataContext);
+                }
+                catch (Exception ex)
+                {
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("Error fetching requests from next queue.\n\n" + ex.Message);
+                    }
+                }
+            }
+        }
+
+        public void BuildFeedQueue(string IP, DataAccessDataContext DataContext)
+        {
+            try
+            {
+                foreach (var item in DataContext.GetFeedList(IP).OrderBy(x => x.Timestamp))
+                {
+                    FeedQueues[IP].AddLast(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(SiteSections[IP].First(x => x.Name == item.SiteSection), Cities[IP].First(x => x.Name == item.City), 0, item.Timestamp, SubCities[IP].FirstOrDefault(x => x.SubCity == item.SubCity)));
+                }
+            }
+            catch (Exception ex)
+            {
+                lock (EventLogKey)
+                {
+                    EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + ex.Message, EventLogEntryType.Error);
                 }
             }
         }
