@@ -28,7 +28,7 @@ namespace CraigslistAutoPoll
             public DataAccessDataContext DataContext;
         }
 
-        public Dictionary<Listing, int> ListingFailures = new Dictionary<Listing, int>();
+        public Dictionary<string, Dictionary<Listing, int>> ListingFailures = new Dictionary<string, Dictionary<Listing, int>>();
 
         public int ConnectionCooldown;
 
@@ -61,8 +61,8 @@ namespace CraigslistAutoPoll
 
         //These lists are caches like the above, but may be used globally for all datacontexts.
         string[] IPs = null;
-        public List<long> CompletedListingIds = null;    //A list of all existing posting IDs, used to prevent double-parsing.
-        public List<Listing> ProcessingListings = new List<Listing>();
+        public Dictionary<string, List<long>> CompletedListingIds = new Dictionary<string,List<long>>();    //A list of all existing posting IDs, used to prevent double-parsing.
+        public Dictionary<string, List<Listing>> ProcessingListings = new Dictionary<string, List<Listing>>();
 
         public Service()
         {
@@ -88,19 +88,20 @@ namespace CraigslistAutoPoll
             try
             {
                 DataAccessDataContext dadc = new DataAccessDataContext();
-                CompletedListingIds = dadc.Listings.Select(x => x.Id).ToList();
                 IPs = dadc.CLCities.Where(x => x.Enabled).Select(x => x.IP).Distinct().ToArray();
                 var proxies = dadc.Proxies.Where(x => x.Enabled).ToArray();
-
                 foreach (string ip in IPs)
                 {
                     DataAccessDataContext datacontext = new DataAccessDataContext();
-                    FeedQueues[ip] = new LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>();
-                    ListingQueues[ip] = new Queue<Listing>();
+                    FeedQueues.Add(ip, new LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>());
+                    ListingQueues.Add(ip, new Queue<Listing>());
+                    ListingFailures.Add(ip, new Dictionary<Listing,int>());
+                    ProcessingListings.Add(ip, new List<Listing>());
 
                     Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled && x.IP == ip).ToArray());
                     SubCities.Add(ip, datacontext.CLSubCities.ToArray());
                     SiteSections.Add(ip, datacontext.CLSiteSections.Where(x => x.Enabled).ToArray());
+                    CompletedListingIds.Add(ip, datacontext.Listings.Where(x=>x.CLCity.IP==ip).Select(x=>x.Id).ToList());
                     KeyChain.Add(ip, new object());
 
                     BuildFeedQueue(ip, datacontext);
@@ -213,10 +214,8 @@ namespace CraigslistAutoPoll
                         hwr.BeginGetResponse(new AsyncCallback(ParseListingInfo), ars);
 
                     }
-                    lock (MasterKey)
-                    {
-                        ProcessingListings.Add(ListingQueue.Dequeue());
-                    }
+
+                    ProcessingListings[IP].Add(ListingQueue.Dequeue());
                 }
                 else
                 {
@@ -366,13 +365,10 @@ namespace CraigslistAutoPoll
 
                         lock (KeyChain[ars.IP])
                         {
-                            lock (MasterKey)
+                            if (CompletedListingIds[ars.IP].Contains(listingSource.Id) || ListingQueues[ars.IP].Any(x => x.Id == listingSource.Id) || ProcessingListings[ars.IP].Any(x=>x.Id == listingSource.Id))
                             {
-                                if (CompletedListingIds.Contains(listingSource.Id) || ListingQueues[ars.IP].Any(x => x.Id == listingSource.Id) || ProcessingListings.Any(x=>x.Id == listingSource.Id))
-                                {
-                                    continue;
-                                }
-                            }
+                                continue;
+                            }   
                         }
                         //PRICE
                         {
@@ -459,11 +455,8 @@ namespace CraigslistAutoPoll
 
                         lock (KeyChain[ars.IP])
                         {
-                            lock (MasterKey)
-                            {
-                                ProcessingListings.Remove(listingSource);
-                                ListingQueues[ars.IP].Enqueue(listingSource);
-                            }
+                            ProcessingListings[ars.IP].Remove(listingSource);
+                            ListingQueues[ars.IP].Enqueue(listingSource);
                         }
                     }
 
@@ -541,7 +534,7 @@ namespace CraigslistAutoPoll
                 {
                     if (ex.Message.Contains("(403)"))    //If a 403 occurs, remove the proxy from operation.
                     {
-                        if(Properties.Settings.Default.DisabledBannedProxies)
+                        if (Properties.Settings.Default.DisabledBannedProxies)
                         {
                             WebProxy wp = (WebProxy)ars.request.Proxy;
                             lock (KeyChain[ars.IP])
@@ -555,39 +548,51 @@ namespace CraigslistAutoPoll
                                     {
                                         ars.DataContext.SubmitChanges();
                                     }
-
                                 }
                             }
                         }
-                        banned403 = true;
-                        return;
-                    }
 
-
-                    lock (KeyChain[ars.IP])
-                    {
-                        if (ListingFailures.Keys.Contains(listingSource))
+                        lock (KeyChain[ars.IP])
                         {
-                            ListingFailures[listingSource]++;
-                            if (ListingFailures[listingSource] > Properties.Settings.Default.MaxConnectionRetries)
+                            ProcessingListings[ars.IP].Remove(listingSource);
+                            ListingQueues[ars.IP].Enqueue(listingSource);
+                        }
+
+                        lock (EventLogKey)
+                        {
+                            EventLog.WriteEntry("Proxy has been banned." + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                        }
+
+                        banned403 = true;
+                    }
+                    else
+                    {
+                        lock (KeyChain[ars.IP])
+                        {
+                            ProcessingListings[ars.IP].Remove(listingSource);
+                            if (ListingFailures[ars.IP].Keys.Contains(listingSource))
                             {
-                                ListingFailures.Remove(listingSource);
+                                ListingFailures[ars.IP][listingSource]++;
+                                if (ListingFailures[ars.IP][listingSource] > Properties.Settings.Default.MaxConnectionRetries)
+                                {
+                                    ListingFailures[ars.IP].Remove(listingSource);
+                                }
+                                else
+                                {
+                                    ListingQueues[ars.IP].Enqueue(listingSource);
+                                }
                             }
                             else
                             {
+                                ListingFailures[ars.IP].Add(listingSource, 1);
                                 ListingQueues[ars.IP].Enqueue(listingSource);
                             }
                         }
-                        else
-                        {
-                            ListingFailures.Add(listingSource, 1);
-                            ListingQueues[ars.IP].Enqueue(listingSource);
-                        }
-                    }
 
-                    lock (EventLogKey)
-                    {
-                        EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                        lock (EventLogKey)
+                        {
+                            EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
+                        }
                     }
                     
                     return;
@@ -597,7 +602,31 @@ namespace CraigslistAutoPoll
                 {
                     HtmlNode hn = response.DocumentNode.SelectSingleNode("//div[@class='removed']");
                     if (hn != null)
+                    {
+                        lock (KeyChain[ars.IP])
+                        {
+                            ProcessingListings[ars.IP].Remove(listingSource);
+                        }
                         return;
+                    }
+                }
+
+                //POSTDATE
+                try
+                {
+                    listingSource.PostDate = DateTime.Parse(response.DocumentNode.SelectSingleNode("//p[@id='display-date']/time").Attributes["datetime"].Value);
+                }
+                catch (Exception ex)
+                {
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("Listing skipped.  Post date could not be identified or parsed.\n\n" + PrintException(ex) + PrintListing(listingSource) + ex.Message, EventLogEntryType.Warning);
+                    }
+                    lock (KeyChain[ars.IP])
+                    {
+                        ProcessingListings[ars.IP].Remove(listingSource);
+                    }
+                    return;
                 }
 
                 //GPS COORDINATES
@@ -638,20 +667,6 @@ namespace CraigslistAutoPoll
                     }
                 }
 
-                //POSTDATE
-                try
-                {
-                    listingSource.PostDate = DateTime.Parse(response.DocumentNode.SelectSingleNode("//p[@id='display-date']/time").Attributes["datetime"].Value);
-                }
-                catch (Exception ex)
-                {
-                    lock (EventLogKey)
-                    {
-                        EventLog.WriteEntry("Listing skipped.  Post date could not be identified or parsed.\n\n" + PrintException(ex) + PrintListing(listingSource) + ex.Message, EventLogEntryType.Warning);
-                    }
-                    return;
-                }
-
                 int[] yearList = Enumerable.Range(1900, 120).ToArray();
                 HtmlNodeCollection hnc = response.DocumentNode.SelectNodes("//p[@class='attrgroup']/span");
                 if (hnc == null) return;  //returns NULL if no nodes exist.
@@ -689,18 +704,23 @@ namespace CraigslistAutoPoll
                 }
                 catch (Exception ex)
                 {
+                    lock (KeyChain[ars.IP])
+                    {
+                        ProcessingListings[ars.IP].Remove(listingSource);
+                    }
+
                     lock (EventLogKey)
                     {
                         EventLog.WriteEntry("An error has occurred while parsing the listing body: \n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                     }
+                    return;
                 }
+
                 lock (KeyChain[ars.IP])
                 {
                     ars.DataContext.Listings.InsertOnSubmit(listingSource);
-                    lock (MasterKey)
-                    {
-                        CompletedListingIds.Add(listingSource.Id);
-                    }
+                    ProcessingListings[ars.IP].Remove(listingSource);
+                    CompletedListingIds[ars.IP].Add(listingSource.Id);       
                     SubmitData(ars.DataContext);
                 }
             }
