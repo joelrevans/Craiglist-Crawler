@@ -62,6 +62,7 @@ namespace CraigslistAutoPoll
         //These lists are caches like the above, but may be used globally for all datacontexts.
         string[] IPs = null;
         public List<long> CompletedListingIds = null;    //A list of all existing posting IDs, used to prevent double-parsing.
+        public List<Listing> ProcessingListings = new List<Listing>();
 
         public Service()
         {
@@ -144,24 +145,46 @@ namespace CraigslistAutoPoll
             catch (Exception ex)
             {
                 StringBuilder debugmsg = new StringBuilder();
-                /*The following is too large to use normally and may surpass the event log character limit.*/
-                foreach (Listing li in DataContext.GetChangeSet().Inserts.OfType<Listing>())
+
+                var DuplicateListings = DataContext.Listings.GroupBy(x => x.Id).Where(x => x.Count() > 1).Select(x => x.Key).ToArray();
+                var DuplicateAttributes = DataContext.ListingAttributes.GroupBy(x => x.AttributeID).Where(x => x.Count() > 1).Select(x => x.Key).ToArray();
+
+                debugmsg.AppendLine("Duplicate Listings:");
+                foreach (long listingid in DuplicateListings)
                 {
-                    debugmsg.Append("[" + li.Id + "]:  " + li.Title + "\n");
-                    foreach (ListingAttribute la in li.ListingAttributes.OrderBy(x => x.Name))
+                    debugmsg.AppendLine("[" + listingid + "]");
+                }
+
+                debugmsg.AppendLine("Duplicate Attributes:");
+                foreach (int attrid in DuplicateAttributes)
+                {
+                    debugmsg.AppendLine("[" + attrid + "]");
+                }
+
+                debugmsg.AppendLine("Existing Listings:");
+                foreach(Listing li in DataContext.GetChangeSet().Inserts.OfType<Listing>())
+                {
+                    if (DataContext.Listings.Any(x=>x.Id==li.Id))
                     {
-                        debugmsg.Append("\t[" + la.Name + "]:  " + la.Value + "\n");
+                        debugmsg.AppendLine("[" + li.Id + "]");
                     }
-                    debugmsg.Append("\n");
                 }
-                if (debugmsg.Length > short.MaxValue - 200)
+
+                debugmsg.AppendLine("Existing Attributes:");
+                foreach (ListingAttribute li in DataContext.GetChangeSet().Inserts.OfType<ListingAttribute>())
                 {
-                    debugmsg.Remove(short.MaxValue - 200, debugmsg.Length - (short.MaxValue-200));
+                    if (DataContext.ListingAttributes.Any(x => x.AttributeID == li.AttributeID))
+                    {
+                        debugmsg.AppendLine("[" + li.AttributeID + "]");
+                    }
                 }
+
+                string wholemessage = "Failed to submit new listings to database.\n\n" + ex.Message + "\n\n" + debugmsg.ToString();
+                wholemessage = wholemessage.Substring(0, Math.Min(short.MaxValue, wholemessage.Length));
 
                 lock (EventLogKey)
                 {
-                    EventLog.WriteEntry("Failed to submit new listings to database.\n\n" + ex.Message + "\n\n" + debugmsg.ToString(), EventLogEntryType.Error);
+                    EventLog.WriteEntry(wholemessage, EventLogEntryType.Error);
                 }
             }
         }
@@ -190,7 +213,10 @@ namespace CraigslistAutoPoll
                         hwr.BeginGetResponse(new AsyncCallback(ParseListingInfo), ars);
 
                     }
-                    ListingQueue.Dequeue();
+                    lock (MasterKey)
+                    {
+                        ProcessingListings.Add(ListingQueue.Dequeue());
+                    }
                 }
                 else
                 {
@@ -340,9 +366,12 @@ namespace CraigslistAutoPoll
 
                         lock (KeyChain[ars.IP])
                         {
-                            if (CompletedListingIds.Contains(listingSource.Id) || ListingQueues[ars.IP].Any(x=>x.Id==listingSource.Id))
+                            lock (MasterKey)
                             {
-                                continue;
+                                if (CompletedListingIds.Contains(listingSource.Id) || ListingQueues[ars.IP].Any(x => x.Id == listingSource.Id) || ProcessingListings.Any(x=>x.Id == listingSource.Id))
+                                {
+                                    continue;
+                                }
                             }
                         }
                         //PRICE
@@ -428,13 +457,24 @@ namespace CraigslistAutoPoll
                             continue;
                         }
 
-                        ListingQueues[ars.IP].Enqueue(listingSource);
-
+                        lock (KeyChain[ars.IP])
+                        {
+                            lock (MasterKey)
+                            {
+                                ProcessingListings.Remove(listingSource);
+                                ListingQueues[ars.IP].Enqueue(listingSource);
+                            }
+                        }
                     }
 
                 //If the for loop completes without a return, the next page needs to be looked at
                 if (NoUpdateTimesPosted == false)
-                    FeedQueues[ars.IP].AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 100, feedResource.Item4, feedResource.Item5));
+                {
+                    lock (KeyChain[ars.IP])
+                    {
+                        FeedQueues[ars.IP].AddFirst(new Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>(feedResource.Item1, feedResource.Item2, feedResource.Item3 + 100, feedResource.Item4, feedResource.Item5));
+                    }
+                }
                 
             }
             catch (Exception ex)
@@ -524,31 +564,32 @@ namespace CraigslistAutoPoll
                     }
 
 
-                    if (ListingFailures.Keys.Contains(listingSource))
+                    lock (KeyChain[ars.IP])
                     {
-                        ListingFailures[listingSource]++;
-                        if (ListingFailures[listingSource] > Properties.Settings.Default.MaxConnectionRetries)
+                        if (ListingFailures.Keys.Contains(listingSource))
                         {
-                            ListingFailures.Remove(listingSource);
+                            ListingFailures[listingSource]++;
+                            if (ListingFailures[listingSource] > Properties.Settings.Default.MaxConnectionRetries)
+                            {
+                                ListingFailures.Remove(listingSource);
+                            }
+                            else
+                            {
+                                ListingQueues[ars.IP].Enqueue(listingSource);
+                            }
                         }
                         else
                         {
+                            ListingFailures.Add(listingSource, 1);
                             ListingQueues[ars.IP].Enqueue(listingSource);
                         }
                     }
-                    else
-                    {
-                        ListingFailures.Add(listingSource, 1);
-                        ListingQueues[ars.IP].Enqueue(listingSource);
-                    }
 
-                    lock (MasterKey)
+                    lock (EventLogKey)
                     {
-                        lock (EventLogKey)
-                        {
-                            EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
-                        }
+                        EventLog.WriteEntry("An error has occurred while retrieving the listing info:\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                     }
+                    
                     return;
                 }
 
@@ -656,14 +697,15 @@ namespace CraigslistAutoPoll
                 lock (KeyChain[ars.IP])
                 {
                     ars.DataContext.Listings.InsertOnSubmit(listingSource);
-                    CompletedListingIds.Add(listingSource.Id);
+                    lock (MasterKey)
+                    {
+                        CompletedListingIds.Add(listingSource.Id);
+                    }
                     SubmitData(ars.DataContext);
                 }
-
             }
             finally
             {
-
                 sw.Stop();
                 parseInfoProcessingTime += sw.Elapsed;
                 parseInfoProcessingCount++;
