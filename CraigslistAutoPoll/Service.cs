@@ -28,9 +28,9 @@ namespace CraigslistAutoPoll
             public DataAccessDataContext DataContext;
         }
 
-        public Dictionary<string, Dictionary<Listing, int>> ListingFailures = new Dictionary<string, Dictionary<Listing, int>>();
+        Dictionary<string, Dictionary<Listing, int>> ListingFailures = new Dictionary<string, Dictionary<Listing, int>>();
 
-        public int ConnectionCooldown;
+        int ConnectionCooldown;
 
         //The following four sets of properties are used to benchmark the application.
         int parseFeedProcessingCount = 0;
@@ -51,8 +51,8 @@ namespace CraigslistAutoPoll
         Dictionary<string, CLSiteSection[]> SiteSections = new Dictionary<string,CLSiteSection[]>();
 
         //Contains all feeds to be parsed, grouped in a dictionary by IP address.
-        public Dictionary<string, LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>> FeedQueues = new Dictionary<string, LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>>();
-        public Dictionary<string, Queue<Listing>> ListingQueues = new Dictionary<string, Queue<Listing>>();
+        Dictionary<string, LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>> FeedQueues = new Dictionary<string, LinkedList<Tuple<CLSiteSection, CLCity, int, DateTime, CLSubCity>>>();
+        Dictionary<string, Queue<Listing>> ListingQueues = new Dictionary<string, Queue<Listing>>();
 
         //Thread lockers.
         object MasterKey = new object();
@@ -61,8 +61,9 @@ namespace CraigslistAutoPoll
 
         //These lists are caches like the above, but may be used globally for all datacontexts.
         string[] IPs = null;
-        public Dictionary<string, List<long>> CompletedListingIds = new Dictionary<string,List<long>>();    //A list of all existing posting IDs, used to prevent double-parsing.
-        public Dictionary<string, List<Listing>> ProcessingListings = new Dictionary<string, List<Listing>>();
+        Dictionary<string, List<long>> CompletedListingIds = new Dictionary<string,List<long>>();    //A list of all existing posting IDs, used to prevent double-parsing.
+        Dictionary<string, List<Listing>> ProcessingListings = new Dictionary<string, List<Listing>>();     //Tracks listings after they are dequeued, but not finished being parsed.
+        Dictionary<string, List<Listing>> PreQueueListings = new Dictionary<string, List<Listing>>();  //Tracks listings that are initialized, but before they are added to the listing queue for future processing.
 
         public Service()
         {
@@ -84,7 +85,6 @@ namespace CraigslistAutoPoll
             ServicePointManager.CheckCertificateRevocationList = false;
 
             ConnectionCooldown = Properties.Settings.Default.ConnectionCooldown;
-
             try
             {
                 DataAccessDataContext dadc = new DataAccessDataContext();
@@ -97,6 +97,7 @@ namespace CraigslistAutoPoll
                     ListingQueues.Add(ip, new Queue<Listing>());
                     ListingFailures.Add(ip, new Dictionary<Listing,int>());
                     ProcessingListings.Add(ip, new List<Listing>());
+                    PreQueueListings.Add(ip, new List<Listing>());
 
                     Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled && x.IP == ip).ToArray());
                     SubCities.Add(ip, datacontext.CLSubCities.ToArray());
@@ -190,14 +191,17 @@ namespace CraigslistAutoPoll
             }
         }
 
+        public List<long> testids = new List<long>();
         public void FetchNextWhatchamacallit(string IP, IWebProxy proxy, DataAccessDataContext DataContext)
         {
-            Queue<Listing> ListingQueue = ListingQueues[IP];
+            Queue<Listing> ListingQueue = ListingQueues[IP];            
 
             lock (KeyChain[IP])
             {
+                
                 if (ListingQueue.Count > 0)
-                {
+                {                    
+
                     HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + ListingQueue.Peek().CLCity.Name + ".craigslist.org/" + (ListingQueue.Peek().CLSubCity == null ? "" : (ListingQueue.Peek().CLSubCity.SubCity + "/")) + ListingQueue.Peek().CLSiteSection.Name + "/" + ListingQueue.Peek().Id.ToString() + ".html");
                     {
                         hwr.Proxy = proxy;
@@ -223,8 +227,10 @@ namespace CraigslistAutoPoll
                     if (FeedQueues[IP].Count == 0)
                         BuildFeedQueue(IP, DataContext);
 
-                    var selectedItem = FeedQueues[IP].First;
-                    HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + selectedItem.Value.Item2.Name + ".craigslist.org/search/" + (selectedItem.Value.Item5 == null ? "" : (selectedItem.Value.Item5.SubCity + "/")) + selectedItem.Value.Item1.Name + "?s=" + selectedItem.Value.Item3.ToString());
+                    var selectedItem = FeedQueues[IP].First.Value;
+                    FeedQueues[IP].RemoveFirst();
+
+                    HttpWebRequest hwr = (HttpWebRequest)WebRequest.Create("http://" + selectedItem.Item2.Name + ".craigslist.org/search/" + (selectedItem.Item5 == null ? "" : (selectedItem.Item5.SubCity + "/")) + selectedItem.Item1.Name + "?s=" + selectedItem.Item3.ToString());
 
                     {
                         hwr.Proxy = proxy;
@@ -232,14 +238,13 @@ namespace CraigslistAutoPoll
                         hwr.Headers.Add(HttpRequestHeader.AcceptEncoding, "gzip, deflate");
                         hwr.KeepAlive = false;
                         hwr.UserAgent = Properties.Settings.Default.UserAgent;
-                        AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = selectedItem.Value, IP = IP, proxy = proxy, DataContext = DataContext };
+                        AsyncRequestStruct ars = new AsyncRequestStruct() { request = hwr, parameters = selectedItem, IP = IP, proxy = proxy, DataContext = DataContext };
 
                         ars.stopwatch = new Stopwatch();
                         ars.stopwatch.Start();
 
                         hwr.BeginGetResponse(new AsyncCallback(ParseFeed), ars);
                     }
-                    FeedQueues[IP].RemoveFirst();
                 }
             }
         }
@@ -365,10 +370,15 @@ namespace CraigslistAutoPoll
 
                         lock (KeyChain[ars.IP])
                         {
-                            if (CompletedListingIds[ars.IP].Contains(listingSource.Id) || ListingQueues[ars.IP].Any(x => x.Id == listingSource.Id) || ProcessingListings[ars.IP].Any(x=>x.Id == listingSource.Id))
+                            if (CompletedListingIds[ars.IP].Contains(listingSource.Id) 
+                                || ListingQueues[ars.IP].Any(x => x.Id == listingSource.Id) 
+                                || ProcessingListings[ars.IP].Any(x=>x.Id == listingSource.Id) 
+                                || PreQueueListings[ars.IP].Any(x=>x.Id == listingSource.Id)
+                            )
                             {
                                 continue;
-                            }   
+                            }
+                            PreQueueListings[ars.IP].Add(listingSource);
                         }
                         //PRICE
                         {
@@ -450,13 +460,18 @@ namespace CraigslistAutoPoll
                             {
                                 EventLog.WriteEntry("Listing skipped.  Error parsing title from listing.\n\n" + PrintException(ex) + PrintListing(listingSource), EventLogEntryType.Warning);
                             }
+                            lock(KeyChain[ars.IP])
+                            {
+                                PreQueueListings[ars.IP].Remove(listingSource);
+                            }
                             continue;
                         }
 
                         lock (KeyChain[ars.IP])
                         {
-                            ProcessingListings[ars.IP].Remove(listingSource);
                             ListingQueues[ars.IP].Enqueue(listingSource);
+                            ProcessingListings[ars.IP].Remove(listingSource);
+                            PreQueueListings[ars.IP].Remove(listingSource);
                         }
                     }
 
@@ -554,8 +569,8 @@ namespace CraigslistAutoPoll
 
                         lock (KeyChain[ars.IP])
                         {
-                            ProcessingListings[ars.IP].Remove(listingSource);
                             ListingQueues[ars.IP].Enqueue(listingSource);
+                            ProcessingListings[ars.IP].Remove(listingSource);
                         }
 
                         lock (EventLogKey)
@@ -569,7 +584,6 @@ namespace CraigslistAutoPoll
                     {
                         lock (KeyChain[ars.IP])
                         {
-                            ProcessingListings[ars.IP].Remove(listingSource);
                             if (ListingFailures[ars.IP].Keys.Contains(listingSource))
                             {
                                 ListingFailures[ars.IP][listingSource]++;
@@ -580,12 +594,14 @@ namespace CraigslistAutoPoll
                                 else
                                 {
                                     ListingQueues[ars.IP].Enqueue(listingSource);
+                                    ProcessingListings[ars.IP].Remove(listingSource);
                                 }
                             }
                             else
                             {
                                 ListingFailures[ars.IP].Add(listingSource, 1);
                                 ListingQueues[ars.IP].Enqueue(listingSource);
+                                ProcessingListings[ars.IP].Remove(listingSource);
                             }
                         }
 
@@ -719,8 +735,8 @@ namespace CraigslistAutoPoll
                 lock (KeyChain[ars.IP])
                 {
                     ars.DataContext.Listings.InsertOnSubmit(listingSource);
+                    CompletedListingIds[ars.IP].Add(listingSource.Id);
                     ProcessingListings[ars.IP].Remove(listingSource);
-                    CompletedListingIds[ars.IP].Add(listingSource.Id);       
                     SubmitData(ars.DataContext);
                 }
             }

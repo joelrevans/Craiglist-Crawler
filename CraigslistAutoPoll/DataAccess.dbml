@@ -39,15 +39,6 @@
       <Association Name="CLCity_Listing" Member="CLCity" ThisKey="City" OtherKey="Name" Type="CLCity" IsForeignKey="true" />
     </Type>
   </Table>
-  <Table Name="dbo.ListingAttribute" Member="ListingAttributes">
-    <Type Name="ListingAttribute">
-      <Column Name="ListingID" Type="System.Int64" DbType="BigInt NOT NULL" CanBeNull="false" />
-      <Column Name="Name" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
-      <Column Name="Value" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
-      <Column Name="AttributeID" Type="System.Int32" DbType="Int NOT NULL IDENTITY" IsPrimaryKey="true" IsDbGenerated="true" CanBeNull="false" />
-      <Association Name="Listing_ListingAttribute" Member="Listing" ThisKey="ListingID" OtherKey="Id" Type="Listing" IsForeignKey="true" />
-    </Type>
-  </Table>
   <Table Name="dbo.Proxy" Member="Proxies">
     <Type Name="Proxy">
       <Column Name="IP" Type="System.String" DbType="VarChar(45) NOT NULL" IsPrimaryKey="true" CanBeNull="false" />
@@ -61,6 +52,15 @@
       <Column Name="ShortName" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
       <Column Name="IP" Type="System.String" DbType="VarChar(15)" CanBeNull="true" />
       <Column Name="Enabled" Type="System.Boolean" DbType="Bit NOT NULL" CanBeNull="false" />
+    </Type>
+  </Table>
+  <Table Name="dbo.ListingAttribute" Member="ListingAttributes">
+    <Type Name="ListingAttribute">
+      <Column Name="ListingID" Type="System.Int64" DbType="BigInt NOT NULL" CanBeNull="false" />
+      <Column Name="Name" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="Value" Type="System.String" DbType="VarChar(255) NOT NULL" CanBeNull="false" />
+      <Column Name="AttributeID" Type="System.Int32" DbType="Int NOT NULL IDENTITY" IsPrimaryKey="true" IsDbGenerated="true" CanBeNull="false" />
+      <Association Name="Listing_ListingAttribute" Member="Listing" ThisKey="ListingID" OtherKey="Id" Type="Listing" IsForeignKey="true" DeleteRule="CASCADE" DeleteOnNull="true" />
     </Type>
   </Table>
   <Function Name="dbo.GetFeedList" Method="GetFeedList" IsComposable="true">
