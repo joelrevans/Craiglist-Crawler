@@ -11,18 +11,21 @@
       <Value Profile="(Default)">Data Source=DEF;Initial Catalog=CraigslistDB;Persist Security Info=True;User ID=sa;Password=gocharlie</Value>
     </Setting>
     <Setting Name="MaxConnectionRetries" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">1</Value>
+      <Value Profile="(Default)">3</Value>
     </Setting>
     <Setting Name="MinSubmissionBundleSize" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">10</Value>
+      <Value Profile="(Default)">100</Value>
     </Setting>
     <Setting Name="UserAgent" Type="System.String" Scope="Application">
       <Value Profile="(Default)">Product Identifier</Value>
     </Setting>
     <Setting Name="ConnectionCooldown" Type="System.Int32" Scope="Application">
-      <Value Profile="(Default)">1000</Value>
+      <Value Profile="(Default)">1500</Value>
     </Setting>
     <Setting Name="DisabledBannedProxies" Type="System.Boolean" Scope="Application">
+      <Value Profile="(Default)">True</Value>
+    </Setting>
+    <Setting Name="EnableConcurrentIPLimits" Type="System.Boolean" Scope="Application">
       <Value Profile="(Default)">True</Value>
     </Setting>
   </Settings>

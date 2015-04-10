@@ -36,7 +36,7 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        [global::System.Configuration.DefaultSettingValueAttribute("3")]
         public int MaxConnectionRetries {
             get {
                 return ((int)(this["MaxConnectionRetries"]));
@@ -45,7 +45,7 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        [global::System.Configuration.DefaultSettingValueAttribute("100")]
         public int MinSubmissionBundleSize {
             get {
                 return ((int)(this["MinSubmissionBundleSize"]));
@@ -63,7 +63,7 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("1000")]
+        [global::System.Configuration.DefaultSettingValueAttribute("1500")]
         public int ConnectionCooldown {
             get {
                 return ((int)(this["ConnectionCooldown"]));
@@ -76,6 +76,15 @@ namespace CraigslistAutoPoll.Properties {
         public bool DisabledBannedProxies {
             get {
                 return ((bool)(this["DisabledBannedProxies"]));
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableConcurrentIPLimits {
+            get {
+                return ((bool)(this["EnableConcurrentIPLimits"]));
             }
         }
     }

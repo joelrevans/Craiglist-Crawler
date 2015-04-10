@@ -88,8 +88,13 @@ namespace CraigslistAutoPoll
             try
             {
                 DataAccessDataContext dadc = new DataAccessDataContext();
-                IPs = dadc.CLCities.Where(x => x.Enabled).Select(x => x.IP).Distinct().ToArray();
+                if (Properties.Settings.Default.EnableConcurrentIPLimits)    
+                    IPs = dadc.CLCities.Where(x => x.Enabled).Select(x => x.IP).Distinct().ToArray();     
+                else
+                    IPs = new string[] { "0" };
+                
                 var proxies = dadc.Proxies.Where(x => x.Enabled).ToArray();
+
                 foreach (string ip in IPs)
                 {
                     DataAccessDataContext datacontext = new DataAccessDataContext();
@@ -99,10 +104,19 @@ namespace CraigslistAutoPoll
                     ProcessingListings.Add(ip, new List<Listing>());
                     PreQueueListings.Add(ip, new List<Listing>());
 
-                    Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled && x.IP == ip).ToArray());
+                    if (Properties.Settings.Default.EnableConcurrentIPLimits)
+                    {
+                        Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled && x.IP == ip).ToArray());
+                        CompletedListingIds.Add(ip, datacontext.Listings.Where(x=>x.CLCity.IP==ip).Select(x=>x.Id).ToList());
+                    }else
+                    {
+                        Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled).ToArray());
+                        CompletedListingIds.Add(ip, datacontext.Listings.Select(x => x.Id).ToList());
+                    }
+
                     SubCities.Add(ip, datacontext.CLSubCities.ToArray());
                     SiteSections.Add(ip, datacontext.CLSiteSections.Where(x => x.Enabled).ToArray());
-                    CompletedListingIds.Add(ip, datacontext.Listings.Where(x=>x.CLCity.IP==ip).Select(x=>x.Id).ToList());
+                    
                     KeyChain.Add(ip, new object());
 
                     BuildFeedQueue(ip, datacontext);
@@ -329,7 +343,7 @@ namespace CraigslistAutoPoll
 
                 foreach (HtmlNode row in rows)
                 {
-                        if (row.SelectSingleNode("a").Attributes["href"].Value.Contains("craigslist.org"))
+                        if (row.SelectSingleNode("a").Attributes["href"].Value.Contains("craigslist."))
                         {   //This condition deals with "Nearby Areas".  Links within the locale are relative -> /<sectionCode>/<Id>.html, whereas out of the locale are global -> http://<city.Name>/craigslist.org/<sectionCode>/<Id>.html
                             return;
                         }
