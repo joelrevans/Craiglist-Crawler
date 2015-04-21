@@ -63,7 +63,7 @@ namespace CraigslistAutoPoll.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("1500")]
+        [global::System.Configuration.DefaultSettingValueAttribute("6000")]
         public int ConnectionCooldown {
             get {
                 return ((int)(this["ConnectionCooldown"]));

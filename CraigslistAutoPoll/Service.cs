@@ -61,7 +61,8 @@ namespace CraigslistAutoPoll
 
         //These lists are caches like the above, but may be used globally for all datacontexts.
         string[] IPs = null;
-        Dictionary<string, List<long>> CompletedListingIds = new Dictionary<string,List<long>>();    //A list of all existing posting IDs, used to prevent double-parsing.
+        Dictionary<string, HashSet<long>> CompletedListingIds = new Dictionary<string, HashSet<long>>();
+        //Dictionary<string, List<long>> CompletedListingIds = new Dictionary<string,List<long>>();    //A list of all existing posting IDs, used to prevent double-parsing.
         Dictionary<string, List<Listing>> ProcessingListings = new Dictionary<string, List<Listing>>();     //Tracks listings after they are dequeued, but not finished being parsed.
         Dictionary<string, List<Listing>> PreQueueListings = new Dictionary<string, List<Listing>>();  //Tracks listings that are initialized, but before they are added to the listing queue for future processing.
 
@@ -107,11 +108,11 @@ namespace CraigslistAutoPoll
                     if (Properties.Settings.Default.EnableConcurrentIPLimits)
                     {
                         Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled && x.IP == ip).ToArray());
-                        CompletedListingIds.Add(ip, datacontext.Listings.Where(x=>x.CLCity.IP==ip).Select(x=>x.Id).ToList());
+                        CompletedListingIds.Add(ip, new HashSet<long>(datacontext.Listings.Where(x=>x.CLCity.IP==ip).Select(x=>x.Id)));
                     }else
                     {
                         Cities.Add(ip, datacontext.CLCities.Where(x => x.Enabled).ToArray());
-                        CompletedListingIds.Add(ip, datacontext.Listings.Select(x => x.Id).ToList());
+                        CompletedListingIds.Add(ip, new HashSet<long>(datacontext.Listings.Select(x => x.Id)));
                     }
 
                     SubCities.Add(ip, datacontext.CLSubCities.ToArray());
@@ -697,7 +698,6 @@ namespace CraigslistAutoPoll
                     }
                 }
 
-                int[] yearList = Enumerable.Range(1900, 120).ToArray();
                 HtmlNodeCollection hnc = response.DocumentNode.SelectNodes("//p[@class='attrgroup']/span");
                 if (hnc == null) return;  //returns NULL if no nodes exist.
 
@@ -789,9 +789,20 @@ namespace CraigslistAutoPoll
             }
             catch (Exception ex)
             {
-                lock (EventLogKey)
+                if (ex.Message.Contains("Rerun the transaction") || ex.Message.Contains("Rerun the transaction"))
                 {
-                    EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + ex.Message, EventLogEntryType.Error);
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + PrintException(ex), EventLogEntryType.Warning);
+                    }
+                    BuildFeedQueue(IP, DataContext);
+                }
+                else
+                {
+                    lock (EventLogKey)
+                    {
+                        EventLog.WriteEntry("An error occurred while attempting to retrieve database records.\n\n" + PrintException(ex), EventLogEntryType.Error);
+                    }
                 }
             }
         }
